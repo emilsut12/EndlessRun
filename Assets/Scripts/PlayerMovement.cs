@@ -122,8 +122,8 @@ public class PlayerMovement : MonoBehaviour
 
     public void Die()
     {
-        alive = false;
-        Invoke("Restart", 2);
+        //alive = false;
+        //Invoke("Restart", 2);
     }
 
     void Restart()
