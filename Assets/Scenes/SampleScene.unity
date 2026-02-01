@@ -194,8 +194,8 @@ Camera:
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 54
-  orthographic: 0
-  orthographic size: 5
+  orthographic: 1
+  orthographic size: 9
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -763,6 +763,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BodySourceView
   BoneMaterial: {fileID: 0}
   BodySourceManager: {fileID: 943499745}
+  videoScreen: {fileID: 705524323}
+  mirrorView: 1
+  flipY: 1
+  zOffset: 0.1
 --- !u!114 &943499748
 MonoBehaviour:
   m_ObjectHideFlags: 0
