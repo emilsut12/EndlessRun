@@ -9,11 +9,11 @@ public class BodySourceView : MonoBehaviour
     public GameObject BodySourceManager;
 
     [Header("Alignment Settings")]
-    [Tooltip("Drag your Quad/VideoScreen here.")]
+    [Tooltip("Video Screen/Quad.")]
     public Transform videoScreen;
 
     [Tooltip("Check this if moving Left makes the skeleton move Right.")]
-    public bool mirrorView = true; // Default to true for Kinect "Mirror" feel
+    public bool mirrorView = true;
 
     [Tooltip("Check this if the skeleton is upside down.")]
     public bool flipY = true;
@@ -191,11 +191,9 @@ public class BodySourceView : MonoBehaviour
         float xNorm = colorPoint.X / 1920.0f;
         float yNorm = colorPoint.Y / 1080.0f;
 
-        // --- NEW MIRROR LOGIC ---
         float x;
         if (mirrorView)
         {
-            // Flips the X coordinate (1 - x)
             x = (1.0f - xNorm - 0.5f) * _currentScreenScale.x;
         }
         else
