@@ -8,11 +8,18 @@ public class KinectInputProvider : MonoBehaviour
     private Body[] _bodies = null;
 
     [Header("Jump Settings")]
-    [Tooltip("How high (in meters) hips must rise to trigger a jump.")]
-    public float jumpThreshold = 0.08f;
+    [Tooltip("How high (meters) hips must rise. Try 0.1 (10cm).")]
+    public float heightThreshold = 0.1f;
 
-    // Track the lowest height the hips have been recently
+    [Tooltip("How fast (m/s) hips must move up. Try 0.5. If too sensitive, increase to 0.8.")]
+    public float velocityThreshold = 0.5f;
+
+    public float jumpCooldown = 1.0f;
+    private float _timeSinceLastJump = 1.0f; // Start ready to jump
+
+    // Calibration
     private float _baselineHipHeight = 0f;
+    private float _lastHipY = 0f;
     private ulong _currentTrackingId = 0;
 
     void Start()
@@ -27,6 +34,8 @@ public class KinectInputProvider : MonoBehaviour
 
     void Update()
     {
+        _timeSinceLastJump += Time.deltaTime;
+
         if (_bodyFrameReader != null)
         {
             using (BodyFrame frame = _bodyFrameReader.AcquireLatestFrame())
@@ -50,7 +59,6 @@ public class KinectInputProvider : MonoBehaviour
                     if (!foundBody)
                     {
                         InputManager.Instance.SetKinectInactive();
-                        // Reset ID to recalibrate when they come back
                         _currentTrackingId = 0;
                     }
                 }
@@ -60,34 +68,45 @@ public class KinectInputProvider : MonoBehaviour
 
     void ProcessBody(Body body)
     {
-        // New Person Detected? Calibrate!
-        if (body.TrackingId != _currentTrackingId)
-        {
-            _currentTrackingId = body.TrackingId;
-            // Set baseline to current height
-            _baselineHipHeight = body.Joints[JointType.SpineBase].Position.Y;
-        }
-
         float currentHipY = body.Joints[JointType.SpineBase].Position.Y;
         float currentHipX = body.Joints[JointType.SpineBase].Position.X;
 
-        // Dynamic Calibration
-        // If they squat down or are shorter than we thought, lower the baseline.
-        // This ensures the "floor" is always the lowest point they've reached.
+        // 1. Calibration
+        if (body.TrackingId != _currentTrackingId)
+        {
+            _currentTrackingId = body.TrackingId;
+            _baselineHipHeight = currentHipY;
+            _lastHipY = currentHipY;
+        }
+
+        // Lower baseline if crouching
         if (currentHipY < _baselineHipHeight)
         {
             _baselineHipHeight = currentHipY;
         }
 
-        // Check for Jump
-        // If current height > baseline + threshold
-        if (currentHipY > _baselineHipHeight + jumpThreshold)
+        // 2. Calculate Velocity
+        float velocity = (currentHipY - _lastHipY) / Time.deltaTime;
+
+        // 3. Check for Jump
+        if (_timeSinceLastJump > jumpCooldown)
         {
-            InputManager.Instance.SetKinectJump(true);
+            bool heightMet = currentHipY > (_baselineHipHeight + heightThreshold);
+            bool speedMet = velocity > velocityThreshold;
+
+            // Debugging: Uncomment this if you can't get it to work
+            // Debug.Log($"Vel: {velocity:F2} / HeightDiff: {currentHipY - _baselineHipHeight:F2}");
+
+            if (heightMet && speedMet)
+            {
+                Debug.Log("KINECT JUMP DETECTED!"); // Check Console for this
+                InputManager.Instance.SetKinectJump(true);
+                _timeSinceLastJump = 0f;
+            }
         }
 
-        // Send Movement
         InputManager.Instance.SetKinectInput(currentHipX);
+        _lastHipY = currentHipY;
     }
 
     void OnApplicationQuit()
