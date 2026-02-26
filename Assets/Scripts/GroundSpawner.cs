@@ -10,19 +10,17 @@ public class GroundSpawner : MonoBehaviour
         GameObject temp = Instantiate(groundTile, nextSpawnPoint, Quaternion.identity);
         GroundTile tileScript = temp.GetComponent<GroundTile>();
 
-        // Existing next spawn point logic
         nextSpawnPoint = temp.transform.GetChild(1).transform.position;
 
         if (spawnItems)
         {
             tileScript.spawnObstacle();
-            tileScript.SpawnScenery(); // Trigger the new scenery logic
+            tileScript.SpawnScenery(); // This call now works again
         }
     }
-
     private void Start()
     {
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 15; i++)
         {
             spawnTile(i == 0 ? false : true);
         }
