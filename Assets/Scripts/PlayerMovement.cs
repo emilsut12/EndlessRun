@@ -11,7 +11,6 @@ public class PlayerMovement : MonoBehaviour
     [Header("Movement Settings")]
     public float baseSpeed = 10f;
     public float jumpForce = 500f;
-    public float horizontalLimit = 4f;
 
     [Tooltip("Multiplier to adjust how strongly the SideSpeed animation reacts to input.")]
     public float animationSensitivity = 10f;
@@ -38,20 +37,20 @@ public class PlayerMovement : MonoBehaviour
     {
         if (!isAlive) return;
 
-        // 1. Forward Movement
+        // Forward Movement
         float currentSpeed = baseSpeed * GameManager.Instance.gameSpeed;
         Vector3 forwardMove = transform.forward * currentSpeed * Time.fixedDeltaTime;
 
-        // 2. Target X from Input Manager
+        // Target X from Input Manager
         float targetX = InputManager.Instance.GetFinalX();
 
-        // Ensure player cannot run infinitely to the sides off the map
-        targetX = Mathf.Clamp(targetX, -horizontalLimit, horizontalLimit);
+        // Clamp horizontal movements
+        targetX = Mathf.Clamp(targetX, -InputManager.Instance.horizontalLimit, InputManager.Instance.horizontalLimit);
 
-        // 1. Calculate the distance to the target lane
+        // Calculate the distance to the target lane
         float horizontalMove = targetX - rb.position.x;
 
-        // 2. Set a deadzone
+        // Set a deadzone
         float sideAnimValue = 0f;
         if (Mathf.Abs(horizontalMove) > 0.05f)
         {
@@ -63,7 +62,7 @@ public class PlayerMovement : MonoBehaviour
 
         rb.MovePosition(newPosition);
 
-        // 3. Trigger animations
+        // Trigger animations
         if (animator != null)
         {
             animator.SetFloat("SideSpeed", sideAnimValue, 0.05f, Time.fixedDeltaTime);
@@ -81,13 +80,13 @@ public class PlayerMovement : MonoBehaviour
             animator.SetBool("IsGrounded", grounded);
         }
 
-        // 3. Jumping Logic
+        // Jumping Logic 
         if (InputManager.Instance.GetJumpInput() && grounded && Time.time > lastJumpTime + jumpCooldown)
         {
             Jump();
         }
 
-        // 4. Ghost Mechanic
+        // Ghost Mechanic
         if (GameManager.Instance != null)
         {
             int playerLayer = LayerMask.NameToLayer("Player");
@@ -97,13 +96,8 @@ public class PlayerMovement : MonoBehaviour
             {
                 Physics.IgnoreLayerCollision(playerLayer, obstacleLayer, GameManager.Instance.isGhost);
             }
-            else
-            {
-                Debug.LogError("PlayerMovement: Ensure your layers are exactly named 'Player' and 'Obstacle' in the top right of the Editor!");
-            }
         }
 
-        // Failsafe
         if (transform.position.y < -5f)
         {
             Die();
@@ -113,6 +107,7 @@ public class PlayerMovement : MonoBehaviour
     private void Jump()
     {
         lastJumpTime = Time.time;
+
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         rb.AddForce(Vector3.up * jumpForce);
 
@@ -124,6 +119,10 @@ public class PlayerMovement : MonoBehaviour
 
     private bool IsGrounded()
     {
+        if (Time.time < lastJumpTime + 0.1f) return false;
+
+        if (rb.linearVelocity.y > 0.1f) return false;
+
         float checkRadius = 0.2f;
         return Physics.CheckSphere(groundCheck.position, checkRadius, groundLayer);
     }

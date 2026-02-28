@@ -7,6 +7,9 @@ public class InputManager : MonoBehaviour
 {
     public static InputManager Instance { get; private set; }
 
+    [Tooltip("Clamps the keyboard tracking so you don't accumulate infinite distance when holding A/D.")]
+    public float horizontalLimit = 4f;
+
     [Header("Keyboard Settings")]
     public float keyboardSpeed = 10.0f;
 
@@ -37,14 +40,17 @@ public class InputManager : MonoBehaviour
         if (kinectInput != null && kinectInput.IsTracked())
         {
             finalX = kinectInput.GetLeanValue() * kinectMovementScale;
+            // Clamp kinect movement just in case the player steps completely out of bounds
+            finalX = Mathf.Clamp(finalX, -horizontalLimit, horizontalLimit);
             return;
         }
 
-        // Priority 2: Webcam (Future implementation)
-
-        // Priority 3: Standard Keyboard
+        // Priority 2: Standard Keyboard (Automatic Fallback)
         float rawInput = Input.GetAxis("Horizontal");
         finalX += rawInput * keyboardSpeed * Time.deltaTime;
+
+        // FIX: Clamp the internal tracking so it doesn't get stuck infinitely accumulating!
+        finalX = Mathf.Clamp(finalX, -horizontalLimit, horizontalLimit);
     }
 
     /// <summary>
