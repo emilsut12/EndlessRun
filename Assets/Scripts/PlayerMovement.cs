@@ -33,7 +33,7 @@ public class PlayerMovement : MonoBehaviour
         if (groundCheck == null) return;
 
         Gizmos.color = Color.green;
-        Gizmos.DrawLine(groundCheck.position, groundCheck.position + Vector3.down * 0.3f);
+        Gizmos.DrawSphere(groundCheck.position, 0.1f);
     }
 
     private void Start()
@@ -85,7 +85,7 @@ public class PlayerMovement : MonoBehaviour
     {
         if (!isAlive) return;
 
-        animator?.SetBool("IsGrounded", grounded);
+        animator?.SetBool("isGrounded", grounded);
 
         if (InputManager.Instance.GetJumpInput() && grounded && Time.time > lastJumpTime + jumpCooldown)
         {
@@ -114,7 +114,7 @@ public class PlayerMovement : MonoBehaviour
     {
         lastJumpTime = Time.time;
 
-        rb.velocity = new Vector3(rb.velocity.x, 0f, rb.velocity.z);
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
 
         if (animator != null)
@@ -125,7 +125,7 @@ public class PlayerMovement : MonoBehaviour
 
     private bool IsGrounded()
     {
-        float rayDistance = 0.3f;
+        float rayDistance = 0.1f;
         int mask = groundLayer & ~LayerMask.GetMask("Player");
         return Physics.Raycast(groundCheck.position, Vector3.down, rayDistance, mask, QueryTriggerInteraction.Ignore);
     }
