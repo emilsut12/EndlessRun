@@ -1,61 +1,60 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+/// <summary>
+/// Handles player forward movement, snappy horizontal shifting, jumping, and ghost states.
+/// </summary>
 public class PlayerMovement : MonoBehaviour
 {
-    bool alive = true;
-    public float speed = 10;
+    private bool isAlive = true;
+
+    [Header("Movement Settings")]
+    public float baseSpeed = 10f;
     public float jumpForce = 500f;
+    public float horizontalLimit = 4f;
 
-    [SerializeField] Rigidbody rb;
-    [SerializeField] LayerMask groundLayer;
-    [SerializeField] Transform groundCheck;
+    [Tooltip("Multiplier to adjust how strongly the SideSpeed animation reacts to input.")]
+    public float animationSensitivity = 10f;
 
-    [SerializeField] Animator animator;
+    [Header("Physics & Layers")]
+    [SerializeField] private Rigidbody rb;
+    [SerializeField] private Transform groundCheck;
+    [SerializeField] private LayerMask groundLayer;
 
-    private bool _isGrounded;
+    [Header("Animations")]
+    [SerializeField] private Animator animator;
 
-    private void Update()
+    private float jumpCooldown = 0.5f;
+    private float lastJumpTime = 0f;
+
+    private void Start()
     {
-        if (!alive) return;
-
-        if (groundCheck != null)
-        {
-            // Use a smaller radius (0.1f) to avoid overlapping with side walls or the player
-            _isGrounded = Physics.CheckSphere(groundCheck.position, 0.1f, groundLayer);
-        }
-        else
-        {
-            _isGrounded = transform.position.y < 1.05f;
-        }
-
-        // You MUST send this to the animator every frame for the Falling transition to work
-        if (animator != null)
-        {
-            animator.SetBool("isGrounded", _isGrounded);
-        }
-
-        if (transform.position.y < -5)
-        {
-            Die();
-        }
+        if (rb == null) Debug.LogError("PlayerMovement: Rigidbody is not assigned!");
+        if (groundCheck == null) Debug.LogError("PlayerMovement: GroundCheck is not assigned!");
+        if (animator == null) Debug.LogWarning("PlayerMovement: Animator is missing!");
     }
 
     private void FixedUpdate()
     {
-        if (!alive) return;
+        if (!isAlive) return;
 
-        Vector3 forwardMove = transform.forward * speed * Time.fixedDeltaTime;
-        float targetX = InputManager.Instance.GetTargetX();
+        // 1. Forward Movement
+        float currentSpeed = baseSpeed * GameManager.Instance.gameSpeed;
+        Vector3 forwardMove = transform.forward * currentSpeed * Time.fixedDeltaTime;
+
+        // 2. Target X from Input Manager
+        float targetX = InputManager.Instance.GetFinalX();
+
+        // Ensure player cannot run infinitely to the sides off the map
+        targetX = Mathf.Clamp(targetX, -horizontalLimit, horizontalLimit);
 
         // 1. Calculate the distance to the target lane
         float horizontalMove = targetX - rb.position.x;
 
-        // 2. Set a deadzone so animations stop when you are "close enough" to the target lane
+        // 2. Set a deadzone
         float sideAnimValue = 0f;
         if (Mathf.Abs(horizontalMove) > 0.05f)
         {
-            // Use Mathf.Sign to get 1 for Right and -1 for Left
             sideAnimValue = Mathf.Sign(horizontalMove);
         }
 
@@ -67,29 +66,85 @@ public class PlayerMovement : MonoBehaviour
         // 3. Trigger animations
         if (animator != null)
         {
-            // SideSpeed will be 1 (Right), -1 (Left), or 0 (Straight)
             animator.SetFloat("SideSpeed", sideAnimValue, 0.05f, Time.fixedDeltaTime);
         }
+    }
 
-        // Existing Jump Logic...
-        if (InputManager.Instance.GetJumpInput())
+    private void Update()
+    {
+        if (!isAlive) return;
+
+        bool grounded = IsGrounded();
+
+        if (animator != null)
         {
-            if (_isGrounded)
-            {
-                rb.AddForce(Vector3.up * jumpForce);
-                if (animator != null) animator.SetTrigger("Jump");
-            }
-            InputManager.Instance.ResetJump();
+            animator.SetBool("IsGrounded", grounded);
         }
+
+        // 3. Jumping Logic
+        if (InputManager.Instance.GetJumpInput() && grounded && Time.time > lastJumpTime + jumpCooldown)
+        {
+            Jump();
+        }
+
+        // 4. Ghost Mechanic
+        if (GameManager.Instance != null)
+        {
+            int playerLayer = LayerMask.NameToLayer("Player");
+            int obstacleLayer = LayerMask.NameToLayer("Obstacle");
+
+            if (playerLayer != -1 && obstacleLayer != -1)
+            {
+                Physics.IgnoreLayerCollision(playerLayer, obstacleLayer, GameManager.Instance.isGhost);
+            }
+            else
+            {
+                Debug.LogError("PlayerMovement: Ensure your layers are exactly named 'Player' and 'Obstacle' in the top right of the Editor!");
+            }
+        }
+
+        // Failsafe
+        if (transform.position.y < -5f)
+        {
+            Die();
+        }
+    }
+
+    private void Jump()
+    {
+        lastJumpTime = Time.time;
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+        rb.AddForce(Vector3.up * jumpForce);
+
+        if (animator != null)
+        {
+            animator.SetTrigger("Jump");
+        }
+    }
+
+    private bool IsGrounded()
+    {
+        float checkRadius = 0.2f;
+        return Physics.CheckSphere(groundCheck.position, checkRadius, groundLayer);
     }
 
     public void Die()
     {
-        // alive = false;
-        // Invoke("Restart", 2);
+        if (!isAlive) return;
+
+        if (GameManager.Instance.isGhost) return;
+
+        isAlive = false;
+
+        if (animator != null)
+        {
+            animator.SetTrigger("Death");
+        }
+
+        Invoke(nameof(RestartGame), 2f);
     }
 
-    void Restart()
+    private void RestartGame()
     {
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }

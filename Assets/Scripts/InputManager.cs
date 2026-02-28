@@ -1,83 +1,72 @@
 using UnityEngine;
 
-// Abstraction layer for handling different input types
+/// <summary>
+/// Central hub for game inputs. Automatically prioritizes connected and tracked devices.
+/// </summary>
 public class InputManager : MonoBehaviour
 {
-    public static InputManager Instance;
+    public static InputManager Instance { get; private set; }
 
-    [Header("Settings")]
-    public float movementScale = 4.0f;  // Shared scale for all inputs
+    [Header("Keyboard Settings")]
     public float keyboardSpeed = 10.0f;
 
-    public float _finalX = 0f;  // Result x for the player
+    [Header("Kinect Settings")]
+    public float kinectMovementScale = 4.0f;
 
-    // Track if Kinect is currently driving
-    private bool _kinectIsActive = false;
+    [Header("Optional Providers")]
+    [Tooltip("Link the Kinect script here")]
+    [SerializeField] private KinectInputProvider kinectInput;
 
-    private bool _isJumping = false;
+    private float finalX = 0f;
 
     private void Awake()
     {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
-    public float GetTargetX()
+    private void Update()
     {
-        return _finalX;
+        // Priority 1: Kinect
+        if (kinectInput != null && kinectInput.IsTracked())
+        {
+            finalX = kinectInput.GetLeanValue() * kinectMovementScale;
+            return;
+        }
+
+        // Priority 2: Webcam (Future implementation)
+
+        // Priority 3: Standard Keyboard
+        float rawInput = Input.GetAxis("Horizontal");
+        finalX += rawInput * keyboardSpeed * Time.deltaTime;
     }
+
+    /// <summary>
+    /// Returns the calculated horizontal position for the player to use.
+    /// </summary>
+    public float GetFinalX()
+    {
+        return finalX;
+    }
+
+    /// <summary>
+    /// Returns true if the active priority device registers a jump.
+    /// </summary>
     public bool GetJumpInput()
     {
-        return _isJumping;
-    }
-
-    public void ResetJump()
-    {
-        _isJumping = false;
-    }
-
-    void Update()
-    {
-        // Fallback: Keyboard Input
-        // Only run this if Kinect is NOT driving
-        if (!_kinectIsActive)
+        // Priority 1: Kinect
+        if (kinectInput != null && kinectInput.IsTracked())
         {
-            float input = Input.GetAxis("Horizontal"); // A/D or Left/Right
-            _finalX += input * keyboardSpeed * Time.deltaTime;
+            return kinectInput.IsJumping();
         }
 
-        // Keyboard Jump (Spacebar)
-        // Use OR logic: If Kinect set jumping to true, keep it true. 
-        // If not, check spacebar.
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            _isJumping = true;
-        }
-
-        // Clamp to ensure keyboard doesn't fly off screen
-        _finalX = Mathf.Clamp(_finalX, -3.5f, 3.5f);
-    }
-
-    // Kinect handling
-    // Kinect script calls this to take controll
-    public void SetKinectInput(float kinectX)
-    {
-        _kinectIsActive = true;
-        _finalX = kinectX * movementScale;
-    }
-
-    // Kinect Calls this for Jumping
-    public void SetKinectJump(bool jumpState)
-    {
-        if (jumpState)
-        {
-            _isJumping = true;
-        }
-    }
-
-    // Kinect script calls this when it loses controll
-    public void SetKinectInactive()
-    {
-        _kinectIsActive = false;
+        // Priority 2: Keyboard Fallback
+        return Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.UpArrow);
     }
 }

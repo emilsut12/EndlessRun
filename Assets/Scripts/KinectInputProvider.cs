@@ -1,117 +1,173 @@
 using UnityEngine;
 using Windows.Kinect;
 
+/// <summary>
+/// Connects to the Kinect v2 sensor, tracks the player's body, and calculates movement/jump inputs.
+/// </summary>
 public class KinectInputProvider : MonoBehaviour
 {
-    private KinectSensor _sensor;
-    private BodyFrameReader _bodyFrameReader;
-    private Body[] _bodies = null;
+    // Kinect Sensor and Body tracking variables
+    private KinectSensor sensor;
+    private BodyFrameReader bodyFrameReader;
+    private Body[] bodies = null;
 
     [Header("Jump Settings")]
-    [Tooltip("How high (meters) hips must rise. Try 0.1 (10cm).")]
-    public float heightThreshold = 0.1f;
+    [Tooltip("How much the spine base must rise on the Y axis to trigger a jump (in meters).")]
+    public float jumpHeightThreshold = 0.15f;
 
-    [Tooltip("How fast (m/s) hips must move up. Try 0.5. If too sensitive, increase to 0.8.")]
-    public float velocityThreshold = 0.5f;
+    // Publicly accessible state variables
+    private float currentLeanValue = 0f;
+    private bool isPlayerTracked = false;
+    private bool isJumping = false;
 
-    public float jumpCooldown = 1.0f;
-    private float _timeSinceLastJump = 1.0f; // Start ready to jump
+    // Baseline tracking for jumps
+    private float spineBaseBaselineY = 0f;
+    private bool isBaselineSet = false;
 
-    // Calibration
-    private float _baselineHipHeight = 0f;
-    private float _lastHipY = 0f;
-    private ulong _currentTrackingId = 0;
-
-    void Start()
+    private void Start()
     {
-        _sensor = KinectSensor.GetDefault();
-        if (_sensor != null)
+        // Initialize Kinect Sensor
+        sensor = KinectSensor.GetDefault();
+
+        if (sensor != null)
         {
-            _bodyFrameReader = _sensor.BodyFrameSource.OpenReader();
-            if (!_sensor.IsOpen) _sensor.Open();
+            bodyFrameReader = sensor.BodyFrameSource.OpenReader();
+
+            if (!sensor.IsOpen)
+            {
+                sensor.Open();
+            }
+        }
+        else
+        {
+            Debug.LogWarning("KinectInputProvider: No Kinect v2 sensor found or connected!");
         }
     }
 
-    void Update()
+    private void Update()
     {
-        _timeSinceLastJump += Time.deltaTime;
-
-        if (_bodyFrameReader != null)
+        if (bodyFrameReader != null)
         {
-            using (BodyFrame frame = _bodyFrameReader.AcquireLatestFrame())
+            using (BodyFrame frame = bodyFrameReader.AcquireLatestFrame())
             {
                 if (frame != null)
                 {
-                    if (_bodies == null) _bodies = new Body[_sensor.BodyFrameSource.BodyCount];
-                    frame.GetAndRefreshBodyData(_bodies);
-
-                    bool foundBody = false;
-                    foreach (var body in _bodies)
+                    if (bodies == null)
                     {
-                        if (body.IsTracked)
-                        {
-                            foundBody = true;
-                            ProcessBody(body);
-                            break;
-                        }
+                        bodies = new Body[sensor.BodyFrameSource.BodyCount];
                     }
 
-                    if (!foundBody)
-                    {
-                        InputManager.Instance.SetKinectInactive();
-                        _currentTrackingId = 0;
-                    }
+                    frame.GetAndRefreshBodyData(bodies);
+                    ProcessBodyData();
                 }
             }
         }
     }
 
-    void ProcessBody(Body body)
+    /// <summary>
+    /// Processes the tracked bodies to calculate lean and jump state.
+    /// </summary>
+    private void ProcessBodyData()
     {
-        float currentHipY = body.Joints[JointType.SpineBase].Position.Y;
-        float currentHipX = body.Joints[JointType.SpineBase].Position.X;
+        isPlayerTracked = false;
+        isJumping = false;
 
-        // 1. Calibration
-        if (body.TrackingId != _currentTrackingId)
+        foreach (Body body in bodies)
         {
-            _currentTrackingId = body.TrackingId;
-            _baselineHipHeight = currentHipY;
-            _lastHipY = currentHipY;
-        }
-
-        // Lower baseline if crouching
-        if (currentHipY < _baselineHipHeight)
-        {
-            _baselineHipHeight = currentHipY;
-        }
-
-        // 2. Calculate Velocity
-        float velocity = (currentHipY - _lastHipY) / Time.deltaTime;
-
-        // 3. Check for Jump
-        if (_timeSinceLastJump > jumpCooldown)
-        {
-            bool heightMet = currentHipY > (_baselineHipHeight + heightThreshold);
-            bool speedMet = velocity > velocityThreshold;
-
-            // Debugging: Uncomment this if you can't get it to work
-            // Debug.Log($"Vel: {velocity:F2} / HeightDiff: {currentHipY - _baselineHipHeight:F2}");
-
-            if (heightMet && speedMet)
+            if (body.IsTracked)
             {
-                Debug.Log("KINECT JUMP DETECTED!"); // Check Console for this
-                InputManager.Instance.SetKinectJump(true);
-                _timeSinceLastJump = 0f;
+                isPlayerTracked = true;
+
+                // Fetch key joints for calculation
+                Windows.Kinect.Joint spineBase = body.Joints[JointType.SpineBase];
+                Windows.Kinect.Joint head = body.Joints[JointType.Head];
+
+                // 1. Calculate Lean (Horizontal movement)
+                // By subtracting the spine base X from the head X, we get a lean amount.
+                // Positive lean = right, Negative lean = left
+                if (spineBase.TrackingState == TrackingState.Tracked && head.TrackingState == TrackingState.Tracked)
+                {
+                    currentLeanValue = head.Position.X - spineBase.Position.X;
+                }
+
+                // 2. Calculate Jump (Vertical movement)
+                if (spineBase.TrackingState == TrackingState.Tracked)
+                {
+                    if (!isBaselineSet)
+                    {
+                        // Set the initial height of the player when they step into frame
+                        spineBaseBaselineY = spineBase.Position.Y;
+                        isBaselineSet = true;
+                    }
+                    else
+                    {
+                        // Check if the current Y position exceeds the baseline + our threshold
+                        if (spineBase.Position.Y > (spineBaseBaselineY + jumpHeightThreshold))
+                        {
+                            isJumping = true;
+                        }
+
+                        // Slowly adjust the baseline over time to account for different players 
+                        // or shifting postures, so they don't get stuck in a "jumping" state
+                        spineBaseBaselineY = Mathf.Lerp(spineBaseBaselineY, spineBase.Position.Y, Time.deltaTime * 2f);
+                    }
+                }
+
+                // We only track the first valid body we find, so break out of the loop
+                break;
             }
         }
 
-        InputManager.Instance.SetKinectInput(currentHipX);
-        _lastHipY = currentHipY;
+        // Clean up data if the player walks out of frame mid-game
+        if (!isPlayerTracked)
+        {
+            isBaselineSet = false;
+            currentLeanValue = 0f;
+        }
     }
 
-    void OnApplicationQuit()
+    private void OnDestroy()
     {
-        if (_bodyFrameReader != null) _bodyFrameReader.Dispose();
-        if (_sensor != null && _sensor.IsOpen) _sensor.Close();
+        // Always clean up the Kinect sensor when the game stops
+        if (bodyFrameReader != null)
+        {
+            bodyFrameReader.Dispose();
+            bodyFrameReader = null;
+        }
+
+        if (sensor != null)
+        {
+            if (sensor.IsOpen)
+            {
+                sensor.Close();
+            }
+            sensor = null;
+        }
+    }
+
+    // PUBLIC API FOR INPUT MANAGER
+
+    /// <summary>
+    /// Returns true if the Kinect is currently tracking a player.
+    /// </summary>
+    public bool IsTracked()
+    {
+        return isPlayerTracked;
+    }
+
+    /// <summary>
+    /// Returns the calculated horizontal lean value.
+    /// </summary>
+    public float GetLeanValue()
+    {
+        return currentLeanValue;
+    }
+
+    /// <summary>
+    /// Returns true if the player is currently jumping.
+    /// </summary>
+    public bool IsJumping()
+    {
+        return isJumping;
     }
 }
