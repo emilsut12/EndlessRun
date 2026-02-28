@@ -10,7 +10,7 @@ public class PlayerMovement : MonoBehaviour
 
     [Header("Movement Settings")]
     public float baseSpeed = 10f;
-    public float jumpForce = 500f;
+    public float jumpForce = 6f;
 
     [Tooltip("Multiplier to adjust how strongly the SideSpeed animation reacts to input.")]
     public float animationSensitivity = 10f;
