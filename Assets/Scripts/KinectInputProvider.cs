@@ -9,6 +9,7 @@ public class KinectInputProvider : MonoBehaviour
     // Kinect Sensor and Body tracking variables
     private KinectSensor sensor;
     private BodyFrameReader bodyFrameReader;
+    public BodySourceManager bodyManager;
     private Body[] bodies = null;
 
     [Header("Jump Settings")]
@@ -62,6 +63,24 @@ public class KinectInputProvider : MonoBehaviour
                 }
             }
         }
+    }
+
+    public float GetPlayerRealWorldX()
+    {
+        if (bodyManager == null) return 0f;
+
+        Windows.Kinect.Body[] data = bodyManager.GetData();
+        if (data == null) return 0f;
+
+        foreach (var body in data)
+        {
+            if (body != null && body.IsTracked)
+            {
+                // Returns the physical X position (in meters) relative to the camera center
+                return body.Joints[Windows.Kinect.JointType.SpineBase].Position.X;
+            }
+        }
+        return 0f;
     }
 
     /// <summary>

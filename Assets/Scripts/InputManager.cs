@@ -20,6 +20,12 @@ public class InputManager : MonoBehaviour
     [Tooltip("Link the Kinect script here")]
     [SerializeField] private KinectInputProvider kinectInput;
 
+    [Header("Kinect Real World Mapping")]
+    [Tooltip("Furthest left physical point the player can step to. (Meters)")]
+    public float minRealWorldX = -1.5f;
+    [Tooltip("Furthest right physical point the player can step to. (Meters)")]
+    public float maxRealWorldX = 1.5f;
+
     private float finalX = 0f;
 
     private void Awake()
@@ -39,9 +45,16 @@ public class InputManager : MonoBehaviour
         // Priority 1: Kinect
         if (kinectInput != null && kinectInput.IsTracked())
         {
-            finalX = kinectInput.GetLeanValue() * kinectMovementScale;
-            // Clamp kinect movement just in case the player steps completely out of bounds
-            finalX = Mathf.Clamp(finalX, -horizontalLimit, horizontalLimit);
+            // 1. Get physical room position in meters
+            float realWorldX = kinectInput.GetPlayerRealWorldX();
+
+            // 2. Find percentage (0.0 to 1.0). e.g., If standing dead center, this returns 0.5.
+            // InverseLerp automatically clamps, so moving out of bounds won't break it.
+            float normalizedPosition = Mathf.InverseLerp(minRealWorldX, maxRealWorldX, realWorldX);
+
+            // 3. Map that percentage directly to the game's left/right bounds
+            finalX = Mathf.Lerp(-horizontalLimit, horizontalLimit, normalizedPosition);
+
             return;
         }
 
