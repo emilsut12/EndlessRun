@@ -25,6 +25,16 @@ public class PlayerMovement : MonoBehaviour
 
     private float jumpCooldown = 0.5f;
     private float lastJumpTime = 0f;
+    private bool grounded;
+
+
+    private void OnDrawGizmosSelected()
+    {
+        if (groundCheck == null) return;
+
+        Gizmos.color = Color.green;
+        Gizmos.DrawLine(groundCheck.position, groundCheck.position + Vector3.down * 0.3f);
+    }
 
     private void Start()
     {
@@ -36,6 +46,8 @@ public class PlayerMovement : MonoBehaviour
     private void FixedUpdate()
     {
         if (!isAlive) return;
+
+        grounded = IsGrounded();
 
         // Forward Movement
         float currentSpeed = baseSpeed * GameManager.Instance.gameSpeed;
@@ -73,14 +85,8 @@ public class PlayerMovement : MonoBehaviour
     {
         if (!isAlive) return;
 
-        bool grounded = IsGrounded();
+        animator?.SetBool("IsGrounded", grounded);
 
-        if (animator != null)
-        {
-            animator.SetBool("IsGrounded", grounded);
-        }
-
-        // Jumping Logic 
         if (InputManager.Instance.GetJumpInput() && grounded && Time.time > lastJumpTime + jumpCooldown)
         {
             Jump();
@@ -108,8 +114,8 @@ public class PlayerMovement : MonoBehaviour
     {
         lastJumpTime = Time.time;
 
-        rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
-        rb.AddForce(Vector3.up * jumpForce);
+        rb.velocity = new Vector3(rb.velocity.x, 0f, rb.velocity.z);
+        rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
 
         if (animator != null)
         {
@@ -119,12 +125,9 @@ public class PlayerMovement : MonoBehaviour
 
     private bool IsGrounded()
     {
-        if (Time.time < lastJumpTime + 0.1f) return false;
-
-        if (rb.linearVelocity.y > 0.1f) return false;
-
-        float checkRadius = 0.2f;
-        return Physics.CheckSphere(groundCheck.position, checkRadius, groundLayer);
+        float rayDistance = 0.3f;
+        int mask = groundLayer & ~LayerMask.GetMask("Player");
+        return Physics.Raycast(groundCheck.position, Vector3.down, rayDistance, mask, QueryTriggerInteraction.Ignore);
     }
 
     public void Die()
