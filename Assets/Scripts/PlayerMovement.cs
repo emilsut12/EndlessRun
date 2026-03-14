@@ -39,12 +39,15 @@ public class PlayerMovement : MonoBehaviour
     public Material opaqueMaterial;
     public Material fadeMaterial;
 
+    private float defaultGravity;
+
     private void OnDrawGizmosSelected()
     {
         if (groundCheck == null) return;
 
         Gizmos.color = Color.green;
-        Gizmos.DrawSphere(groundCheck.position, 0.1f);
+        // Draw the exact same sphere we use in IsGrounded
+        Gizmos.DrawSphere(groundCheck.position, 0.2f);
     }
 
     private void Start()
@@ -55,6 +58,15 @@ public class PlayerMovement : MonoBehaviour
 
         // Grab all renderers attached to the player (in case the model has multiple parts)
         playerRenderers = GetComponentsInChildren<Renderer>();
+
+        // Store the default gravity from Unity's physics settings
+        defaultGravity = Physics.gravity.y;
+    }
+
+    private void OnDestroy()
+    {
+        // Reset gravity so it doesn't stay permanently modified in the editor after exiting play mode
+        Physics.gravity = new Vector3(0, defaultGravity, 0);
     }
 
     private void FixedUpdate()
@@ -64,9 +76,16 @@ public class PlayerMovement : MonoBehaviour
 
         grounded = IsGrounded();
 
-        // Forward Movement
-        float currentSpeed = baseSpeed * GameManager.Instance.gameSpeed;
-        Vector3 forwardMove = transform.forward * currentSpeed * Time.fixedDeltaTime;
+        // 1. Calculate dynamic speed multiplier
+        float speedMultiplier = GameManager.Instance.currentSpeed / GameManager.Instance.baseSpeed;
+
+        // 2. Scale Gravity dynamically to keep jump arcs tight at higher speeds
+        float scaledGravity = defaultGravity * (speedMultiplier * speedMultiplier);
+        Physics.gravity = new Vector3(0, scaledGravity, 0);
+
+        // 3. Forward Movement (scaled by dynamic speed and global gameSpeed)
+        float moveSpeed = baseSpeed * speedMultiplier * GameManager.Instance.gameSpeed;
+        Vector3 forwardMove = transform.forward * moveSpeed * Time.fixedDeltaTime;
 
         // Target X from Input Manager
         float targetX = InputManager.Instance.GetFinalX();
@@ -101,6 +120,12 @@ public class PlayerMovement : MonoBehaviour
         if (!isAlive || GameManager.Instance.CurrentState != GameManager.GameState.Playing)
             return;
 
+        if (animator != null)
+        {
+            float speedMultiplier = GameManager.Instance.currentSpeed / GameManager.Instance.baseSpeed;
+            animator.speed = speedMultiplier;
+        }
+
         animator?.SetBool("isGrounded", grounded);
 
         if (InputManager.Instance.GetJumpInput() && grounded && Time.time > lastJumpTime + jumpCooldown)
@@ -131,8 +156,12 @@ public class PlayerMovement : MonoBehaviour
     {
         lastJumpTime = Time.time;
 
+        // Scale jump force relative to the game's current speed multiplier
+        float speedMultiplier = GameManager.Instance.currentSpeed / GameManager.Instance.baseSpeed;
+        float scaledJumpForce = jumpForce * speedMultiplier;
+
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
-        rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+        rb.AddForce(Vector3.up * scaledJumpForce, ForceMode.Impulse);
 
         if (animator != null)
         {
@@ -142,9 +171,12 @@ public class PlayerMovement : MonoBehaviour
 
     private bool IsGrounded()
     {
-        float rayDistance = 0.1f;
+        // A CheckSphere is much more reliable at high speeds than a thin Raycast line
+        float checkRadius = 0.2f;
         int mask = groundLayer & ~LayerMask.GetMask("Player");
-        return Physics.Raycast(groundCheck.position, Vector3.down, rayDistance, mask, QueryTriggerInteraction.Ignore);
+
+        // Checks if there are any ground colliders intersecting a small sphere at the groundCheck position
+        return Physics.CheckSphere(groundCheck.position, checkRadius, mask, QueryTriggerInteraction.Ignore);
     }
 
     // New Take Hit Method

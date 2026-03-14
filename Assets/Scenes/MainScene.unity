@@ -14,12 +14,12 @@ OcclusionCullingSettings:
 RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
-  m_Fog: 0
+  m_Fog: 1
   m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-  m_FogMode: 3
+  m_FogMode: 1
   m_FogDensity: 0.01
-  m_LinearFogStart: 0
-  m_LinearFogEnd: 300
+  m_LinearFogStart: 100
+  m_LinearFogEnd: 200
   m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
@@ -2811,10 +2811,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   playerTransform: {fileID: 148179586}
-  renderDistance: 10
-  isGhost: 0
+  renderDistance: 15
+  isGhost: 1
   gameSpeed: 1
   startingLives: 3
+  baseSpeed: 10
+  currentSpeed: 0
+  maxSpeed: 30
+  speedIncreaseRate: 0.25
+  speedPenaltyOnLifeLost: 5
   startScreen: {fileID: 2762976}
   gameOverScreen: {fileID: 2125952202}
 --- !u!1 &1517244952
@@ -3390,7 +3395,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2125952203
 RectTransform:
   m_ObjectHideFlags: 0

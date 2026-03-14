@@ -17,7 +17,7 @@ public class GameManager : MonoBehaviour
 
     [Tooltip("The number of ground tiles to spawn ahead of the player.")]
     [Range(5, 50)]
-    public int renderDistance = 15;
+    public int renderDistance = 25;
 
     [Header("Testing & Gameplay Settings")]
     [Tooltip("If true, the player will phase through obstacles.")]
@@ -31,6 +31,17 @@ public class GameManager : MonoBehaviour
     public int startingLives = 3;
     public int CurrentLives { get; private set; }
 
+    [Header("Speed Settings")]
+    public float baseSpeed = 10f;
+    public float currentSpeed;
+    public float maxSpeed = 30f;
+
+    [Tooltip("How much the speed increases per second")]
+    public float speedIncreaseRate = 0.25f;
+
+    [Tooltip("How much speed is lost when the player takes damage")]
+    public float speedPenaltyOnLifeLost = 5f;
+
     [Header("UI Panels")]
     public GameObject startScreen;
     public GameObject gameOverScreen;
@@ -38,22 +49,17 @@ public class GameManager : MonoBehaviour
     private void Awake()
     {
         // Enforce Singleton
-        if (Instance == null)
-        {
-            Instance = this;
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
     }
 
     private void Start()
     {
         if (playerTransform == null) Debug.LogError("GameManager: Player Transform is not assigned!");
 
-        // Initialize lives
+        // Initialize lives and speed
         CurrentLives = startingLives;
+        currentSpeed = baseSpeed;
 
         // Start the game in the menu state
         ShowMainMenu();
@@ -66,6 +72,24 @@ public class GameManager : MonoBehaviour
         {
             // Reload the current scene
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        }
+        else if (CurrentState == GameState.Playing)
+        {
+            // Gradually increase the speed over time, clamping it at maxSpeed
+            if (currentSpeed < maxSpeed)
+            {
+                // --- SMART CALCULATION ---
+                // Ratio of starting lives to current lives. 
+                // Mathf.Max(1, CurrentLives) ensures we never accidentally divide by zero if lives hit 0.
+                float lifeMultiplier = (float)startingLives / Mathf.Max(1, CurrentLives);
+
+                // Calculate the exact rate for this frame
+                float dynamicIncreaseRate = speedIncreaseRate * lifeMultiplier;
+
+                // Apply the increase
+                currentSpeed += dynamicIncreaseRate * Time.deltaTime;
+                currentSpeed = Mathf.Min(currentSpeed, maxSpeed);
+            }
         }
     }
 
@@ -91,11 +115,14 @@ public class GameManager : MonoBehaviour
         Time.timeScale = 1f;
     }
 
-    // New method to handle taking damage
     public void LoseLife()
     {
         CurrentLives--;
         Debug.Log("Lost a life! Lives remaining: " + CurrentLives);
+
+        // Reduce the speed, but don't let it drop below the base starting speed
+        currentSpeed -= speedPenaltyOnLifeLost;
+        currentSpeed = Mathf.Max(currentSpeed, baseSpeed);
     }
 
     public void TriggerGameOver()
