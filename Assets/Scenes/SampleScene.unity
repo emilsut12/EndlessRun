@@ -1038,7 +1038,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   baseSpeed: 10
-  jumpForce: 300
+  jumpForce: 6
   animationSensitivity: 10
   rb: {fileID: 148179587}
   groundCheck: {fileID: 2059036320}
