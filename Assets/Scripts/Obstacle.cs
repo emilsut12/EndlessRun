@@ -11,13 +11,14 @@ public class Obstacle : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
-        // kill player
-        if (collision.gameObject.name == "Player")
+        // Hit the player
+        if (collision.gameObject.name == "Player" || collision.gameObject.CompareTag("Player"))
         {
-            // Only kill if the player is not a ghost
+            // Only deal damage if the player is not a ghost
             if (GameManager.Instance != null && !GameManager.Instance.isGhost)
             {
-                playerMovement.Die();
+                // Call TakeHit instead of Die!
+                playerMovement.TakeHit();
             }
         }
     }

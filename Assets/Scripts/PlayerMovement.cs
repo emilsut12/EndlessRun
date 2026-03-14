@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using System.Collections; // Needed for Coroutines
 
 /// <summary>
 /// Handles player forward movement, snappy horizontal shifting, jumping, and ghost states.
@@ -15,6 +16,13 @@ public class PlayerMovement : MonoBehaviour
     [Tooltip("Multiplier to adjust how strongly the SideSpeed animation reacts to input.")]
     public float animationSensitivity = 10f;
 
+    [Header("Lives & Invulnerability Settings")]
+    public float invulnerabilityDuration = 2f;
+    public float fadeSpeed = 5f; // How fast the player pulses in and out
+    public float targetOpacity = 0.5f; // Drops to ~50%
+    private bool isInvulnerable = false;
+    private Renderer[] playerRenderers;
+
     [Header("Physics & Layers")]
     [SerializeField] private Rigidbody rb;
     [SerializeField] private Transform groundCheck;
@@ -27,6 +35,9 @@ public class PlayerMovement : MonoBehaviour
     private float lastJumpTime = 0f;
     private bool grounded;
 
+    [Header("Materials")]
+    public Material opaqueMaterial;
+    public Material fadeMaterial;
 
     private void OnDrawGizmosSelected()
     {
@@ -41,6 +52,9 @@ public class PlayerMovement : MonoBehaviour
         if (rb == null) Debug.LogError("PlayerMovement: Rigidbody is not assigned!");
         if (groundCheck == null) Debug.LogError("PlayerMovement: GroundCheck is not assigned!");
         if (animator == null) Debug.LogWarning("PlayerMovement: Animator is missing!");
+
+        // Grab all renderers attached to the player (in case the model has multiple parts)
+        playerRenderers = GetComponentsInChildren<Renderer>();
     }
 
     private void FixedUpdate()
@@ -94,7 +108,7 @@ public class PlayerMovement : MonoBehaviour
             Jump();
         }
 
-        // Ghost Mechanic
+        // Ghost & Invulnerability Mechanic
         if (GameManager.Instance != null)
         {
             int playerLayer = LayerMask.NameToLayer("Player");
@@ -102,7 +116,8 @@ public class PlayerMovement : MonoBehaviour
 
             if (playerLayer != -1 && obstacleLayer != -1)
             {
-                Physics.IgnoreLayerCollision(playerLayer, obstacleLayer, GameManager.Instance.isGhost);
+                // We now ignore collisions if the player is a Ghost OR currently Invulnerable
+                Physics.IgnoreLayerCollision(playerLayer, obstacleLayer, GameManager.Instance.isGhost || isInvulnerable);
             }
         }
 
@@ -132,32 +147,101 @@ public class PlayerMovement : MonoBehaviour
         return Physics.Raycast(groundCheck.position, Vector3.down, rayDistance, mask, QueryTriggerInteraction.Ignore);
     }
 
+    // New Take Hit Method
+    public void TakeHit()
+    {
+        if (!isAlive || isInvulnerable || GameManager.Instance.isGhost) return;
+
+        GameManager.Instance.LoseLife();
+
+        if (GameManager.Instance.CurrentLives > 0)
+        {
+            // Player survives, become invulnerable
+            StartCoroutine(InvulnerabilityRoutine());
+        }
+        else
+        {
+            // Out of lives
+            Die();
+        }
+    }
+
+    private IEnumerator InvulnerabilityRoutine()
+    {
+        isInvulnerable = true;
+        float elapsed = 0f;
+
+        // 1. Swap to the Fade material
+        SetPlayerMaterial(fadeMaterial);
+
+        while (elapsed < invulnerabilityDuration)
+        {
+            elapsed += Time.deltaTime;
+
+            // PingPong moves between 0 and 1. Lerp pulses smoothly between 1f and targetOpacity
+            float pingPongValue = Mathf.PingPong(Time.time * fadeSpeed, 1f);
+            float currentAlpha = Mathf.Lerp(1f, targetOpacity, pingPongValue);
+
+            SetPlayerOpacity(currentAlpha);
+
+            yield return null;
+        }
+
+        // 2. Time is up, reset back to the solid Opaque material
+        SetPlayerMaterial(opaqueMaterial);
+        isInvulnerable = false;
+    }
+
+    private void SetPlayerMaterial(Material newMat)
+    {
+        if (playerRenderers == null || newMat == null) return;
+
+        foreach (Renderer r in playerRenderers)
+        {
+            // This replaces the material on the mesh with the one we passed in
+            r.material = newMat;
+        }
+    }
+
+    private void SetPlayerOpacity(float alpha)
+    {
+        if (playerRenderers == null) return;
+
+        foreach (Renderer r in playerRenderers)
+        {
+            // r.material gets the instance of the material currently on the mesh
+            Material mat = r.material;
+
+            if (mat.HasProperty("_Color"))
+            {
+                Color c = mat.color;
+                c.a = alpha;
+                mat.color = c;
+            }
+            else if (mat.HasProperty("_BaseColor"))
+            {
+                Color c = mat.GetColor("_BaseColor");
+                c.a = alpha;
+                mat.SetColor("_BaseColor", c);
+            }
+        }
+    }
+
     public void Die()
     {
-        // Add a check to prevent triggering death multiple times
-        // Assuming you have 'private bool isAlive = true;' at the top of your script
         if (!isAlive) return;
 
         if (GameManager.Instance.isGhost) return;
 
         isAlive = false;
 
-        // Notify the GameManager to display the UI
-        GameManager.Instance.TriggerGameOver();
-
-        // 1. Disable the animator so the player stops their running animation
+        // Disable the animator so the player stops their running animation
         if (animator != null)
         {
-            animator.enabled = false;
+            animator.SetTrigger("Death");
         }
 
-        // 2. Tumble backwards (Ragdoll/Physics effect)
-        Rigidbody rb = GetComponent<Rigidbody>();
-        if (rb != null)
-        {
-            rb.constraints = RigidbodyConstraints.None; // Unfreeze rotations
-            rb.AddForce(Vector3.back * 5f, ForceMode.Impulse);
-            rb.AddTorque(new Vector3(Random.Range(-10f, 10f), 0, Random.Range(-10f, 10f)), ForceMode.Impulse);
-        }
+        // Notify the GameManager to display the UI
+        GameManager.Instance.TriggerGameOver();
     }
 }

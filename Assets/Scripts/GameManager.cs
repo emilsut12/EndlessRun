@@ -27,6 +27,10 @@ public class GameManager : MonoBehaviour
     [Range(0.1f, 5f)]
     public float gameSpeed = 1.0f;
 
+    [Tooltip("Amount of lives the player starts with.")]
+    public int startingLives = 3;
+    public int CurrentLives { get; private set; }
+
     [Header("UI Panels")]
     public GameObject startScreen;
     public GameObject gameOverScreen;
@@ -47,6 +51,9 @@ public class GameManager : MonoBehaviour
     private void Start()
     {
         if (playerTransform == null) Debug.LogError("GameManager: Player Transform is not assigned!");
+
+        // Initialize lives
+        CurrentLives = startingLives;
 
         // Start the game in the menu state
         ShowMainMenu();
@@ -82,6 +89,13 @@ public class GameManager : MonoBehaviour
 
         // Unfreeze gameplay
         Time.timeScale = 1f;
+    }
+
+    // New method to handle taking damage
+    public void LoseLife()
+    {
+        CurrentLives--;
+        Debug.Log("Lost a life! Lives remaining: " + CurrentLives);
     }
 
     public void TriggerGameOver()

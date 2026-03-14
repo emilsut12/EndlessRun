@@ -18,8 +18,8 @@ public class GroundSpawner : MonoBehaviour
         // Spawn the initial batch of tiles based on the setting
         for (int i = 0; i < startingTiles; i++)
         {
-            // The very first tile shouldn't have obstacles
-            spawnTile(i != 0);
+            // The first x tiles should not have obstacles
+            spawnTile(!(i < 3));
         }
     }
 
