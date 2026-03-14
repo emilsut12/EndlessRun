@@ -1,4 +1,5 @@
 using UnityEngine;
+using System;
 using Windows.Kinect;
 
 /// <summary>
@@ -16,7 +17,12 @@ public class KinectInputProvider : MonoBehaviour
     [Tooltip("How much the spine base must rise on the Y axis to trigger a jump (in meters).")]
     public float jumpHeightThreshold = 0.15f;
 
+    [Header("UI Feedback")]
+    [Tooltip("Optional: A UI Text or Panel that activates if the Kinect runtime is missing.")]
+    public GameObject kinectWarningUI;
+
     // Publicly accessible state variables
+    public bool IsKinectInitialized { get; private set; } = false;
     private float currentLeanValue = 0f;
     private bool isPlayerTracked = false;
     private bool isJumping = false;
@@ -27,26 +33,59 @@ public class KinectInputProvider : MonoBehaviour
 
     private void Start()
     {
-        // Initialize Kinect Sensor
-        sensor = KinectSensor.GetDefault();
+        // Make sure the warning is hidden by default
+        if (kinectWarningUI != null) kinectWarningUI.SetActive(false);
 
-        if (sensor != null)
+        // Attempt to initialize safely
+        InitializeKinectSafe();
+    }
+
+    // We put this in a separate method to prevent the JIT compiler from crashing 
+    // the script before it can even read the try-catch block.
+    private void InitializeKinectSafe()
+    {
+        try
         {
-            bodyFrameReader = sensor.BodyFrameSource.OpenReader();
+            // Initialize Kinect Sensor
+            sensor = KinectSensor.GetDefault();
 
-            if (!sensor.IsOpen)
+            if (sensor != null)
             {
-                sensor.Open();
+                bodyFrameReader = sensor.BodyFrameSource.OpenReader();
+
+                if (!sensor.IsOpen)
+                {
+                    sensor.Open();
+                }
+
+                IsKinectInitialized = true;
+                Debug.Log("Kinect initialized successfully.");
+            }
+            else
+            {
+                Debug.LogWarning("KinectInputProvider: No Kinect v2 sensor found or connected!");
+                IsKinectInitialized = false;
             }
         }
-        else
+        catch (DllNotFoundException)
         {
-            Debug.LogWarning("KinectInputProvider: No Kinect v2 sensor found or connected!");
+            Debug.LogWarning("Kinect Runtime is not installed on this machine. Kinect input disabled.");
+            IsKinectInitialized = false;
+            if (kinectWarningUI != null) kinectWarningUI.SetActive(true);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("Failed to initialize Kinect: " + e.Message);
+            IsKinectInitialized = false;
+            if (kinectWarningUI != null) kinectWarningUI.SetActive(true);
         }
     }
 
     private void Update()
     {
+        // SAFEGUARD: Do not run any Kinect code if initialization failed
+        if (!IsKinectInitialized) return;
+
         if (bodyFrameReader != null)
         {
             using (BodyFrame frame = bodyFrameReader.AcquireLatestFrame())
@@ -67,7 +106,8 @@ public class KinectInputProvider : MonoBehaviour
 
     public float GetPlayerRealWorldX()
     {
-        if (bodyManager == null) return 0f;
+        // SAFEGUARD
+        if (!IsKinectInitialized || bodyManager == null) return 0f;
 
         Windows.Kinect.Body[] data = bodyManager.GetData();
         if (data == null) return 0f;
@@ -102,8 +142,6 @@ public class KinectInputProvider : MonoBehaviour
                 Windows.Kinect.Joint head = body.Joints[JointType.Head];
 
                 // 1. Calculate Lean (Horizontal movement)
-                // By subtracting the spine base X from the head X, we get a lean amount.
-                // Positive lean = right, Negative lean = left
                 if (spineBase.TrackingState == TrackingState.Tracked && head.TrackingState == TrackingState.Tracked)
                 {
                     currentLeanValue = head.Position.X - spineBase.Position.X;
@@ -147,6 +185,9 @@ public class KinectInputProvider : MonoBehaviour
 
     private void OnDestroy()
     {
+        // SAFEGUARD: Only close if we successfully opened it
+        if (!IsKinectInitialized) return;
+
         // Always clean up the Kinect sensor when the game stops
         if (bodyFrameReader != null)
         {
@@ -171,6 +212,7 @@ public class KinectInputProvider : MonoBehaviour
     /// </summary>
     public bool IsTracked()
     {
+        if (!IsKinectInitialized) return false;
         return isPlayerTracked;
     }
 

@@ -611,7 +611,7 @@ PrefabInstance:
     - target: {fileID: -605493852317963469, guid: 7a318391d7273754c8106514a8f88bb8, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 0edaebfbcd697454da04ae17eb2ea2d1, type: 2}
+      objectReference: {fileID: 2813316624091176714, guid: 7a318391d7273754c8106514a8f88bb8, type: 3}
     - target: {fileID: -538053921927575314, guid: 7a318391d7273754c8106514a8f88bb8, type: 3}
       propertyPath: m_Layer
       value: 3
@@ -1363,6 +1363,8 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 128
   animator: {fileID: 1670043896}
+  opaqueMaterial: {fileID: 2813316624091176714, guid: 7a318391d7273754c8106514a8f88bb8, type: 3}
+  fadeMaterial: {fileID: 2100000, guid: 0edaebfbcd697454da04ae17eb2ea2d1, type: 2}
 --- !u!1 &156733177
 GameObject:
   m_ObjectHideFlags: 0
@@ -2407,6 +2409,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::KinectInputProvider
   bodyManager: {fileID: 0}
   jumpHeightThreshold: 0.15
+  kinectWarningUI: {fileID: 0}
 --- !u!1 &963194225
 GameObject:
   m_ObjectHideFlags: 0

@@ -42,8 +42,8 @@ public class InputManager : MonoBehaviour
 
     private void Update()
     {
-        // Priority 1: Kinect
-        if (kinectInput != null && kinectInput.IsTracked())
+        // Priority 1: Kinect (Now strictly checks if it's initialized successfully)
+        if (kinectInput != null && kinectInput.IsKinectInitialized && kinectInput.IsTracked())
         {
             // 1. Get physical room position in meters
             float realWorldX = kinectInput.GetPlayerRealWorldX();
@@ -80,7 +80,7 @@ public class InputManager : MonoBehaviour
     public bool GetJumpInput()
     {
         // Priority 1: Kinect
-        if (kinectInput != null && kinectInput.IsTracked())
+        if (kinectInput != null && kinectInput.IsKinectInitialized && kinectInput.IsTracked())
         {
             return kinectInput.IsJumping();
         }
