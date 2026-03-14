@@ -1,12 +1,15 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Central manager for global game settings, state, and shared references.
 /// </summary>
 public class GameManager : MonoBehaviour
 {
-    // The single instance of this class
     public static GameManager Instance { get; private set; }
+
+    public enum GameState { MainMenu, Playing, GameOver }
+    public GameState CurrentState { get; private set; } = GameState.MainMenu;
 
     [Header("Global References")]
     [Tooltip("Master reference to the player object.")]
@@ -24,28 +27,82 @@ public class GameManager : MonoBehaviour
     [Range(0.1f, 5f)]
     public float gameSpeed = 1.0f;
 
+    [Header("UI Panels")]
+    public GameObject startScreen;
+    public GameObject gameOverScreen;
+
     private void Awake()
     {
-        // Enforce the Singleton pattern
+        // Enforce Singleton
         if (Instance == null)
         {
             Instance = this;
-            // Keeps the GameManager alive if you switch or reload scenes
-            DontDestroyOnLoad(gameObject);
         }
         else
         {
             Destroy(gameObject);
-            return; // Stop execution if this is a duplicate
         }
     }
 
     private void Start()
     {
-        // Throw an error immediately if setup is incomplete
-        if (playerTransform == null)
+        if (playerTransform == null) Debug.LogError("GameManager: Player Transform is not assigned!");
+
+        // Start the game in the menu state
+        ShowMainMenu();
+    }
+
+    private void Update()
+    {
+        // If game over, wait for any key press to restart
+        if (CurrentState == GameState.GameOver && Input.anyKeyDown)
         {
-            Debug.LogError("GameManager: Player Transform is not assigned in the Inspector!");
+            // Reload the current scene
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
+    }
+
+    public void ShowMainMenu()
+    {
+        CurrentState = GameState.MainMenu;
+
+        if (startScreen != null) startScreen.SetActive(true);
+        if (gameOverScreen != null) gameOverScreen.SetActive(false);
+
+        // Freeze gameplay while the menu is up
+        Time.timeScale = 0f;
+    }
+
+    public void StartGame()
+    {
+        CurrentState = GameState.Playing;
+
+        if (startScreen != null) startScreen.SetActive(false);
+        if (gameOverScreen != null) gameOverScreen.SetActive(false);
+
+        // Unfreeze gameplay
+        Time.timeScale = 1f;
+    }
+
+    public void TriggerGameOver()
+    {
+        if (CurrentState == GameState.GameOver) return;
+
+        CurrentState = GameState.GameOver;
+        if (gameOverScreen != null) gameOverScreen.SetActive(true);
+    }
+
+    public void QuitGame()
+    {
+        Application.Quit();
+
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#endif
+    }
+
+    public void OpenSettings()
+    {
+        Debug.Log("Settings menu not implemented yet!");
     }
 }

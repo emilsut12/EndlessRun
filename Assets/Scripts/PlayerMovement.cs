@@ -45,7 +45,8 @@ public class PlayerMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (!isAlive) return;
+        if (!isAlive || GameManager.Instance.CurrentState != GameManager.GameState.Playing)
+            return;
 
         grounded = IsGrounded();
 
@@ -83,7 +84,8 @@ public class PlayerMovement : MonoBehaviour
 
     private void Update()
     {
-        if (!isAlive) return;
+        if (!isAlive || GameManager.Instance.CurrentState != GameManager.GameState.Playing)
+            return;
 
         animator?.SetBool("isGrounded", grounded);
 
@@ -132,22 +134,30 @@ public class PlayerMovement : MonoBehaviour
 
     public void Die()
     {
+        // Add a check to prevent triggering death multiple times
+        // Assuming you have 'private bool isAlive = true;' at the top of your script
         if (!isAlive) return;
 
         if (GameManager.Instance.isGhost) return;
 
         isAlive = false;
 
+        // Notify the GameManager to display the UI
+        GameManager.Instance.TriggerGameOver();
+
+        // 1. Disable the animator so the player stops their running animation
         if (animator != null)
         {
-            animator.SetTrigger("Death");
+            animator.enabled = false;
         }
 
-        Invoke(nameof(RestartGame), 2f);
-    }
-
-    private void RestartGame()
-    {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        // 2. Tumble backwards (Ragdoll/Physics effect)
+        Rigidbody rb = GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.constraints = RigidbodyConstraints.None; // Unfreeze rotations
+            rb.AddForce(Vector3.back * 5f, ForceMode.Impulse);
+            rb.AddTorque(new Vector3(Random.Range(-10f, 10f), 0, Random.Range(-10f, 10f)), ForceMode.Impulse);
+        }
     }
 }

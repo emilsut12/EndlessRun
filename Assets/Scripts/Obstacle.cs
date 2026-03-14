@@ -2,9 +2,8 @@ using UnityEngine;
 
 public class Obstacle : MonoBehaviour
 {
-    PlayerMovement playerMovement;
+    private PlayerMovement playerMovement;
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         playerMovement = Object.FindFirstObjectByType<PlayerMovement>();
@@ -15,13 +14,11 @@ public class Obstacle : MonoBehaviour
         // kill player
         if (collision.gameObject.name == "Player")
         {
-            playerMovement.Die();
+            // Only kill if the player is not a ghost
+            if (GameManager.Instance != null && !GameManager.Instance.isGhost)
+            {
+                playerMovement.Die();
+            }
         }
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
     }
 }
