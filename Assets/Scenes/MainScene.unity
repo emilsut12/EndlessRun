@@ -15,11 +15,11 @@ RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
   m_Fog: 1
-  m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  m_FogColor: {r: 0.6901961, g: 0.87843144, b: 0.90196085, a: 1}
   m_FogMode: 1
   m_FogDensity: 0.01
-  m_LinearFogStart: 100
-  m_LinearFogEnd: 200
+  m_LinearFogStart: 150
+  m_LinearFogEnd: 240
   m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
@@ -1113,6 +1113,7 @@ GameObject:
   - component: {fileID: 147805586}
   - component: {fileID: 147805588}
   - component: {fileID: 147805587}
+  - component: {fileID: 147805590}
   m_Layer: 6
   m_Name: Camera
   m_TagString: Untagged
@@ -1152,8 +1153,8 @@ Camera:
   m_GameObject: {fileID: 147805585}
   m_Enabled: 1
   serializedVersion: 2
-  m_ClearFlags: 1
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_ClearFlags: 2
+  m_BackGroundColor: {r: 0, g: 0, b: 0, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -1194,6 +1195,31 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
+--- !u!114 &147805590
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 147805585}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4cd85beaa323c884b98372c7d86ab1a1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::KinectDirectRenderer
+  BodySourceManager: {fileID: 943499745}
+  KinectCamera: {fileID: 147805588}
+  LineMaterial: {fileID: 2100000, guid: f2ea145c63353784985576f08398a815, type: 2}
+  mirrorView: 0
+  flipY: 0
+  showBoundaryBoxes: 1
+  leftBoxColor: {r: 1, g: 0.2, b: 0.2, a: 0.2}
+  rightBoxColor: {r: 1, g: 0.20000002, b: 0.20000002, a: 0.2}
+  edgeColor: {r: 0, g: 0, b: 0, a: 1}
+  edgeHoverColor: {r: 0.745, g: 0.745, b: 0.745, a: 1}
+  edgeThickness: 0.002
+  edgeGrabDistance: 0.02
+  keyboardAdjustSpeed: 0.3
 --- !u!1 &148179582
 GameObject:
   m_ObjectHideFlags: 0
@@ -1526,7 +1552,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 337768287}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1467908786}
+        m_TargetAssemblyTypeName: GameManager, Assembly-CSharp
+        m_MethodName: QuitGame
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &337768287
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2355,7 +2393,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 943499745}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8821130411451d343a1488e2a9db134e, type: 3}
   m_Name: 
@@ -2407,7 +2445,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8e6ab9acdbc2ca644a5494630ebda580, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::KinectInputProvider
-  bodyManager: {fileID: 0}
+  bodyManager: {fileID: 943499748}
   jumpHeightThreshold: 0.15
   kinectWarningUI: {fileID: 0}
 --- !u!1 &963194225
@@ -2437,8 +2475,8 @@ Camera:
   m_GameObject: {fileID: 963194225}
   m_Enabled: 1
   serializedVersion: 2
-  m_ClearFlags: 1
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_ClearFlags: 2
+  m_BackGroundColor: {r: 0.6901961, g: 0.8784314, b: 0.9019608, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -2756,8 +2794,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1467908785}
-  - component: {fileID: 1467908784}
   - component: {fileID: 1467908786}
+  - component: {fileID: 1467908784}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -2780,7 +2818,7 @@ MonoBehaviour:
   horizontalLimit: 4
   keyboardSpeed: 10
   kinectMovementScale: 4
-  kinectInput: {fileID: 0}
+  kinectInput: {fileID: 943499750}
   minRealWorldX: -1.5
   maxRealWorldX: 1.5
 --- !u!4 &1467908785
@@ -2811,8 +2849,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   playerTransform: {fileID: 148179586}
-  renderDistance: 15
-  isGhost: 1
+  renderDistance: 25
+  isGhost: 0
   gameSpeed: 1
   startingLives: 3
   baseSpeed: 10
@@ -2820,6 +2858,8 @@ MonoBehaviour:
   maxSpeed: 30
   speedIncreaseRate: 0.25
   speedPenaltyOnLifeLost: 5
+  windowedWidth: 1280
+  windowedHeight: 720
   startScreen: {fileID: 2762976}
   gameOverScreen: {fileID: 2125952202}
 --- !u!1 &1517244952

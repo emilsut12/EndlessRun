@@ -1,9 +1,8 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-/// <summary>
-/// Central manager for global game settings, state, and shared references.
-/// </summary>
+// Central manager for game state, speed progression, lives, UI panels, and display settings.
+// Singleton — access via GameManager.Instance from any script.
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
@@ -12,22 +11,21 @@ public class GameManager : MonoBehaviour
     public GameState CurrentState { get; private set; } = GameState.MainMenu;
 
     [Header("Global References")]
-    [Tooltip("Master reference to the player object.")]
     public Transform playerTransform;
 
-    [Tooltip("The number of ground tiles to spawn ahead of the player.")]
+    [Tooltip("How many ground tiles to keep spawned ahead of the player.")]
     [Range(5, 50)]
     public int renderDistance = 25;
 
     [Header("Testing & Gameplay Settings")]
-    [Tooltip("If true, the player will phase through obstacles.")]
+    [Tooltip("Player phases through obstacles when enabled.")]
     public bool isGhost = false;
 
-    [Tooltip("Global speed multiplier for the game environment.")]
+    [Tooltip("Global speed multiplier applied to forward movement and obstacle scroll.")]
     [Range(0.1f, 5f)]
     public float gameSpeed = 1.0f;
 
-    [Tooltip("Amount of lives the player starts with.")]
+    [Tooltip("Lives the player starts each run with.")]
     public int startingLives = 3;
     public int CurrentLives { get; private set; }
 
@@ -36,19 +34,30 @@ public class GameManager : MonoBehaviour
     public float currentSpeed;
     public float maxSpeed = 30f;
 
-    [Tooltip("How much the speed increases per second")]
+    [Tooltip("Speed gained per second at full health.")]
     public float speedIncreaseRate = 0.25f;
 
-    [Tooltip("How much speed is lost when the player takes damage")]
+    [Tooltip("Flat speed penalty when the player loses a life.")]
     public float speedPenaltyOnLifeLost = 5f;
+
+    [Header("Display Settings")]
+    [Tooltip("Resolution width used when launching in windowed mode.")]
+    public int windowedWidth = 1280;
+    [Tooltip("Resolution height used when launching in windowed mode.")]
+    public int windowedHeight = 720;
 
     [Header("UI Panels")]
     public GameObject startScreen;
     public GameObject gameOverScreen;
 
+    // Tracks whether the display mode has already been set this application session.
+    // Static so it survives scene reloads (SceneManager.LoadScene destroys instances).
+    private static bool _displayInitialized = false;
+
+    private const string PrefKeyFullscreen = "IsFullscreen";
+
     private void Awake()
     {
-        // Enforce Singleton
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
     }
@@ -57,36 +66,54 @@ public class GameManager : MonoBehaviour
     {
         if (playerTransform == null) Debug.LogError("GameManager: Player Transform is not assigned!");
 
-        // Initialize lives and speed
         CurrentLives = startingLives;
         currentSpeed = baseSpeed;
 
-        // Start the game in the menu state
+        // Only apply display settings on the very first scene load of the session.
+        // This prevents F11 fullscreen from being reverted when the scene reloads after death.
+        if (!_displayInitialized)
+        {
+            _displayInitialized = true;
+
+            // Restore the player's last fullscreen preference, default to windowed
+            if (PlayerPrefs.GetInt(PrefKeyFullscreen, 0) == 1)
+                Screen.SetResolution(Screen.currentResolution.width, Screen.currentResolution.height, FullScreenMode.FullScreenWindow);
+            else
+                Screen.SetResolution(windowedWidth, windowedHeight, FullScreenMode.Windowed);
+        }
+
         ShowMainMenu();
     }
 
     private void Update()
     {
-        // If game over, wait for any key press to restart
+        // F11 toggles between windowed and borderless fullscreen, persisted across runs
+        if (Input.GetKeyDown(KeyCode.F11))
+        {
+            if (Screen.fullScreen)
+            {
+                Screen.SetResolution(windowedWidth, windowedHeight, FullScreenMode.Windowed);
+                PlayerPrefs.SetInt(PrefKeyFullscreen, 0);
+            }
+            else
+            {
+                Screen.SetResolution(Screen.currentResolution.width, Screen.currentResolution.height, FullScreenMode.FullScreenWindow);
+                PlayerPrefs.SetInt(PrefKeyFullscreen, 1);
+            }
+        }
+
         if (CurrentState == GameState.GameOver && Input.anyKeyDown)
         {
-            // Reload the current scene
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
         else if (CurrentState == GameState.Playing)
         {
-            // Gradually increase the speed over time, clamping it at maxSpeed
             if (currentSpeed < maxSpeed)
             {
-                // --- SMART CALCULATION ---
-                // Ratio of starting lives to current lives. 
-                // Mathf.Max(1, CurrentLives) ensures we never accidentally divide by zero if lives hit 0.
+                // Speed ramps faster when the player has fewer lives
                 float lifeMultiplier = (float)startingLives / Mathf.Max(1, CurrentLives);
-
-                // Calculate the exact rate for this frame
                 float dynamicIncreaseRate = speedIncreaseRate * lifeMultiplier;
 
-                // Apply the increase
                 currentSpeed += dynamicIncreaseRate * Time.deltaTime;
                 currentSpeed = Mathf.Min(currentSpeed, maxSpeed);
             }
@@ -100,7 +127,6 @@ public class GameManager : MonoBehaviour
         if (startScreen != null) startScreen.SetActive(true);
         if (gameOverScreen != null) gameOverScreen.SetActive(false);
 
-        // Freeze gameplay while the menu is up
         Time.timeScale = 0f;
     }
 
@@ -111,7 +137,6 @@ public class GameManager : MonoBehaviour
         if (startScreen != null) startScreen.SetActive(false);
         if (gameOverScreen != null) gameOverScreen.SetActive(false);
 
-        // Unfreeze gameplay
         Time.timeScale = 1f;
     }
 
@@ -120,7 +145,6 @@ public class GameManager : MonoBehaviour
         CurrentLives--;
         Debug.Log("Lost a life! Lives remaining: " + CurrentLives);
 
-        // Reduce the speed, but don't let it drop below the base starting speed
         currentSpeed -= speedPenaltyOnLifeLost;
         currentSpeed = Mathf.Max(currentSpeed, baseSpeed);
     }
