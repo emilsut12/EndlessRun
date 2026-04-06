@@ -17,6 +17,8 @@ public class InputManager : MonoBehaviour
     public float kinectMovementScale = 4.0f;
 
     [Header("Optional Providers")]
+    [Tooltip("Preferred motion provider. Webcam or Kinect providers can both plug in here.")]
+    [SerializeField] private MotionInputProvider motionInput;
     [Tooltip("Link the Kinect script here")]
     [SerializeField] private KinectInputProvider kinectInput;
 
@@ -42,20 +44,19 @@ public class InputManager : MonoBehaviour
 
     private void Update()
     {
-        // Priority 1: Kinect (Now strictly checks if it's initialized successfully)
-        if (kinectInput != null && kinectInput.IsKinectInitialized && kinectInput.IsTracked())
+        MotionInputProvider activeMotionProvider = GetActiveMotionProvider();
+
+        if (activeMotionProvider != null && activeMotionProvider.IsProviderAvailable && activeMotionProvider.IsTracked())
         {
-            // 1. Get physical room position in meters
-            float realWorldX = kinectInput.GetPlayerRealWorldX();
+            if (activeMotionProvider.TryGetHorizontalPosition(out float horizontalPosition, out MotionHorizontalSpace positionSpace))
+            {
+                float normalizedPosition = positionSpace == MotionHorizontalSpace.RealWorldMeters
+                    ? Mathf.InverseLerp(minRealWorldX, maxRealWorldX, horizontalPosition)
+                    : Mathf.Clamp01(horizontalPosition);
 
-            // 2. Find percentage (0.0 to 1.0). e.g., If standing dead center, this returns 0.5.
-            // InverseLerp automatically clamps, so moving out of bounds won't break it.
-            float normalizedPosition = Mathf.InverseLerp(minRealWorldX, maxRealWorldX, realWorldX);
-
-            // 3. Map that percentage directly to the game's left/right bounds
-            finalX = Mathf.Lerp(-horizontalLimit, horizontalLimit, normalizedPosition);
-
-            return;
+                finalX = Mathf.Lerp(-horizontalLimit, horizontalLimit, normalizedPosition);
+                return;
+            }
         }
 
         // Priority 2: Standard Keyboard (Automatic Fallback)
@@ -79,13 +80,19 @@ public class InputManager : MonoBehaviour
     /// </summary>
     public bool GetJumpInput()
     {
-        // Priority 1: Kinect
-        if (kinectInput != null && kinectInput.IsKinectInitialized && kinectInput.IsTracked())
-        {
-            return kinectInput.IsJumping();
-        }
+        MotionInputProvider activeMotionProvider = GetActiveMotionProvider();
+        if (activeMotionProvider != null && activeMotionProvider.IsProviderAvailable && activeMotionProvider.IsTracked())
+            return activeMotionProvider.GetJumpInput();
 
         // Priority 2: Keyboard Fallback
         return Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.UpArrow);
+    }
+
+    private MotionInputProvider GetActiveMotionProvider()
+    {
+        if (motionInput == null && kinectInput != null)
+            motionInput = kinectInput;
+
+        return motionInput;
     }
 }

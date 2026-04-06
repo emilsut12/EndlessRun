@@ -5,7 +5,7 @@ using Windows.Kinect;
 /// <summary>
 /// Connects to the Kinect v2 sensor, tracks the player's body, and calculates movement/jump inputs.
 /// </summary>
-public class KinectInputProvider : MonoBehaviour
+public class KinectInputProvider : MotionInputProvider
 {
     // Kinect Sensor and Body tracking variables
     private KinectSensor sensor;
@@ -26,6 +26,9 @@ public class KinectInputProvider : MonoBehaviour
     private float currentLeanValue = 0f;
     private bool isPlayerTracked = false;
     private bool isJumping = false;
+
+    public override string ProviderName => "Kinect";
+    public override bool IsProviderAvailable => IsKinectInitialized;
 
     // Baseline tracking for jumps
     private float spineBaseBaselineY = 0f;
@@ -210,10 +213,22 @@ public class KinectInputProvider : MonoBehaviour
     /// <summary>
     /// Returns true if the Kinect is currently tracking a player.
     /// </summary>
-    public bool IsTracked()
+    public override bool IsTracked()
     {
         if (!IsKinectInitialized) return false;
         return isPlayerTracked;
+    }
+
+    public override bool TryGetHorizontalPosition(out float positionX, out MotionHorizontalSpace positionSpace)
+    {
+        positionX = 0f;
+        positionSpace = MotionHorizontalSpace.RealWorldMeters;
+
+        if (!IsKinectInitialized || !IsTracked())
+            return false;
+
+        positionX = GetPlayerRealWorldX();
+        return true;
     }
 
     /// <summary>
@@ -230,5 +245,10 @@ public class KinectInputProvider : MonoBehaviour
     public bool IsJumping()
     {
         return isJumping;
+    }
+
+    public override bool GetJumpInput()
+    {
+        return IsJumping();
     }
 }
