@@ -13,6 +13,9 @@ public class KinectDirectRenderer : MonoBehaviour
     [Tooltip("Assign the WebcamInputProvider from KinectDebugRig here to show the live webcam feed on Display 2.")]
     public WebcamInputProvider webcamInput;
 
+    [Tooltip("Assign the PoseInputProvider to show its feed/debug on Display 2 when ML mode is active.")]
+    public PoseInputProvider poseInput;
+
     [Header("Kinect References")]
     public GameObject BodySourceManager;
     public Camera KinectCamera;
@@ -42,9 +45,6 @@ public class KinectDirectRenderer : MonoBehaviour
     [Tooltip("When true, shows the background-subtraction debug view (green = foreground) instead of the raw webcam feed. Toggle with D key.")]
     public bool showDebugView = false;
 
-    [Tooltip("Flip the webcam feed vertically on Display 2.")]
-    public bool flipFeedVertically = true;
-
     // Kinect internals
     private BodySourceManager _bodyManager;
     private Kinect.CoordinateMapper _mapper;
@@ -70,6 +70,9 @@ public class KinectDirectRenderer : MonoBehaviour
 
     // Unlit material for blitting the webcam texture fullscreen
     private Material _webcamMat;
+
+    // Letterbox bounds — cached so skeleton overlay can match the webcam quad position
+    private float _letterboxXMin, _letterboxXMax, _letterboxYMin, _letterboxYMax;
 
     // Full Kinect v2 skeleton bone connectivity (child → parent)
     private static readonly Dictionary<Kinect.JointType, Kinect.JointType> BoneMap =
@@ -503,21 +506,43 @@ public class KinectDirectRenderer : MonoBehaviour
         // occluded by scene geometry. NEVER use Graphics.Blit(tex, null) in
         // OnPostRender — it targets Display 1's backbuffer and breaks all
         // subsequent GL draws on this camera.
-        if (_webcamMat != null && webcamInput != null && webcamInput.IsWebcamRunning)
+        //
+        // Picks the active provider: ML Pose when enabled, otherwise background-subtraction.
+        bool usePose = poseInput != null && poseInput.isActiveAndEnabled && poseInput.IsWebcamRunning;
+        bool useWebcam = !usePose && webcamInput != null && webcamInput.IsWebcamRunning;
+
+        if (_webcamMat != null && (usePose || useWebcam))
         {
-            Texture rawTex = showDebugView
-                ? (Texture)webcamInput.GetDebugTexture() ?? webcamInput.GetRawTexture()
-                : webcamInput.GetRawTexture();
+            Texture rawTex;
+            bool flipH;
+            bool flipV;
+
+            if (usePose)
+            {
+                rawTex = showDebugView
+                    ? (Texture)poseInput.GetDebugTexture() ?? poseInput.GetRawTexture()
+                    : poseInput.GetRawTexture();
+                flipH = poseInput.mirrorHorizontal;
+                // For Texture2D debug textures, no auto-flip; for WebCamTexture, negate
+                flipV = (rawTex is WebCamTexture wct2) && wct2.videoVerticallyMirrored;
+                flipV = !flipV;
+            }
+            else
+            {
+                rawTex = showDebugView
+                    ? (Texture)webcamInput.GetDebugTexture() ?? webcamInput.GetRawTexture()
+                    : webcamInput.GetRawTexture();
+                flipH = webcamInput.mirrorHorizontal;
+                flipV = (rawTex is WebCamTexture wct) && !webcamInput.overrideVerticalFlip
+                       ? wct.videoVerticallyMirrored
+                       : webcamInput.manualFlipVertical;
+                // The auto-detected flipV from WebCamTexture is wrong for our
+                // GL.LoadOrtho() → manual clip-space shader pipeline. Always negate.
+                flipV = !flipV;
+            }
+
             if (rawTex != null && rawTex.width > 1)
             {
-                bool flipH = webcamInput.mirrorHorizontal;
-                bool flipV = (rawTex is WebCamTexture wct) && !webcamInput.overrideVerticalFlip
-                           ? wct.videoVerticallyMirrored
-                           : webcamInput.manualFlipVertical;
-
-                // Allow runtime override from the F key toggle
-                if (flipFeedVertically)
-                    flipV = !flipV;
 
                 // Aspect-fill: crop sides or top/bottom so the image fills
                 // the screen without stretching.
@@ -526,29 +551,37 @@ public class KinectDirectRenderer : MonoBehaviour
                 float screenH      = KinectCamera != null ? KinectCamera.pixelHeight : Screen.height;
                 float screenAspect = screenW / screenH;
 
-                float uMin = 0f, uMax = 1f, vMin = 0f, vMax = 1f;
+                // Aspect-fit (letterbox): show the entire webcam image,
+                // with black bars where the aspect ratios don't match.
+                float qxMin = 0f, qxMax = 1f, qyMin = 0f, qyMax = 1f;
                 if (texAspect > screenAspect)
                 {
-                    // Texture is wider — crop sides
-                    float visibleFraction = screenAspect / texAspect;
-                    float offset = (1f - visibleFraction) * 0.5f;
-                    uMin = offset;
-                    uMax = 1f - offset;
+                    // Texture is wider — bars on top/bottom
+                    float fitHeight = screenAspect / texAspect;
+                    float barSize = (1f - fitHeight) * 0.5f;
+                    qyMin = barSize;
+                    qyMax = 1f - barSize;
                 }
                 else
                 {
-                    // Texture is taller — crop top/bottom
-                    float visibleFraction = texAspect / screenAspect;
-                    float offset = (1f - visibleFraction) * 0.5f;
-                    vMin = offset;
-                    vMax = 1f - offset;
+                    // Texture is taller — bars on left/right
+                    float fitWidth = texAspect / screenAspect;
+                    float barSize = (1f - fitWidth) * 0.5f;
+                    qxMin = barSize;
+                    qxMax = 1f - barSize;
                 }
 
-                // Apply flip by swapping min/max
-                float u0 = flipH ? uMax : uMin;
-                float u1 = flipH ? uMin : uMax;
-                float v0 = flipV ? vMax : vMin;
-                float v1 = flipV ? vMin : vMax;
+                // Cache for skeleton overlay alignment
+                _letterboxXMin = qxMin;
+                _letterboxXMax = qxMax;
+                _letterboxYMin = qyMin;
+                _letterboxYMax = qyMax;
+
+                // UV is full texture, flip by swapping
+                float u0 = flipH ? 1f : 0f;
+                float u1 = flipH ? 0f : 1f;
+                float v0 = flipV ? 1f : 0f;
+                float v1 = flipV ? 0f : 1f;
 
                 _webcamMat.mainTexture = rawTex;
                 _webcamMat.SetPass(0);
@@ -556,10 +589,10 @@ public class KinectDirectRenderer : MonoBehaviour
                 GL.LoadOrtho();
                 GL.Begin(GL.QUADS);
                 GL.Color(Color.white);
-                GL.TexCoord2(u0, v0); GL.Vertex3(0f, 0f, 0f);
-                GL.TexCoord2(u1, v0); GL.Vertex3(1f, 0f, 0f);
-                GL.TexCoord2(u1, v1); GL.Vertex3(1f, 1f, 0f);
-                GL.TexCoord2(u0, v1); GL.Vertex3(0f, 1f, 0f);
+                GL.TexCoord2(u0, v0); GL.Vertex3(qxMin, qyMin, 0f);
+                GL.TexCoord2(u1, v0); GL.Vertex3(qxMax, qyMin, 0f);
+                GL.TexCoord2(u1, v1); GL.Vertex3(qxMax, qyMax, 0f);
+                GL.TexCoord2(u0, v1); GL.Vertex3(qxMin, qyMax, 0f);
                 GL.End();
                 GL.PopMatrix();
             }
@@ -612,6 +645,92 @@ public class KinectDirectRenderer : MonoBehaviour
             GL.End();
             GL.PopMatrix();
         }
+
+        // ML Pose skeleton (drawn when PoseInputProvider is active)
+        if (usePose && poseInput != null && poseInput.IsTracked() && LineMaterial != null)
+        {
+            DrawPoseSkeleton();
+        }
+    }
+
+    // ── ML Pose skeleton drawing ─────────────────────────────────────────────────
+
+    // MoveNet skeleton connectivity (pairs of keypoint indices)
+    private static readonly int[,] PoseBones = {
+        {0, 1}, {0, 2}, {1, 3}, {2, 4},           // face
+        {5, 6}, {5, 7}, {6, 8}, {7, 9}, {8, 10},  // arms
+        {5, 11}, {6, 12}, {11, 12},                // torso
+        {11, 13}, {12, 14}, {13, 15}, {14, 16},    // legs
+    };
+
+    private void DrawPoseSkeleton()
+    {
+        var kps = poseInput.GetKeypoints();
+        if (kps == null || kps.Length < 17) return;
+
+        float minConf = poseInput.minimumConfidence;
+        bool mirror = poseInput.mirrorHorizontal;
+
+        // Map keypoint 0-1 coords into the letterboxed quad region
+        float lxMin = _letterboxXMin;
+        float lxMax = _letterboxXMax;
+        float lyMin = _letterboxYMin;
+        float lyMax = _letterboxYMax;
+
+        LineMaterial.SetPass(0);
+        GL.PushMatrix();
+        GL.LoadOrtho();
+
+        // Draw bones as cyan lines
+        GL.Begin(GL.LINES);
+        for (int b = 0; b < PoseBones.GetLength(0); b++)
+        {
+            int i1 = PoseBones[b, 0];
+            int i2 = PoseBones[b, 1];
+            if (kps[i1].z < minConf || kps[i2].z < minConf) continue;
+
+            float x1 = mirror ? (1f - kps[i1].x) : kps[i1].x;
+            float y1 = 1f - kps[i1].y;
+            float x2 = mirror ? (1f - kps[i2].x) : kps[i2].x;
+            float y2 = 1f - kps[i2].y;
+
+            // Remap from 0-1 texture space into letterboxed screen space
+            x1 = Mathf.Lerp(lxMin, lxMax, x1);
+            y1 = Mathf.Lerp(lyMin, lyMax, y1);
+            x2 = Mathf.Lerp(lxMin, lxMax, x2);
+            y2 = Mathf.Lerp(lyMin, lyMax, y2);
+
+            GL.Color(new Color(0f, 0.8f, 1f, 0.9f));
+            GL.Vertex3(x1, y1, 0f);
+            GL.Vertex3(x2, y2, 0f);
+        }
+        GL.End();
+
+        // Draw keypoint dots as small quads
+        GL.Begin(GL.QUADS);
+        float dotSize = 0.006f;
+        for (int i = 0; i < 17; i++)
+        {
+            if (kps[i].z < minConf) continue;
+
+            float x = mirror ? (1f - kps[i].x) : kps[i].x;
+            float y = 1f - kps[i].y;
+            x = Mathf.Lerp(lxMin, lxMax, x);
+            y = Mathf.Lerp(lyMin, lyMax, y);
+
+            Color dotColor = (i == 11 || i == 12)
+                ? new Color(0f, 1f, 0.3f, 1f)
+                : new Color(1f, 0.2f, 0.2f, 1f);
+            GL.Color(dotColor);
+
+            GL.Vertex3(x - dotSize, y - dotSize, 0f);
+            GL.Vertex3(x + dotSize, y - dotSize, 0f);
+            GL.Vertex3(x + dotSize, y + dotSize, 0f);
+            GL.Vertex3(x - dotSize, y + dotSize, 0f);
+        }
+        GL.End();
+
+        GL.PopMatrix();
     }
 
     // Draws the two shaded overlay regions and the bright draggable edge lines.

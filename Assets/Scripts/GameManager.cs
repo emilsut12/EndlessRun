@@ -55,6 +55,16 @@ public class GameManager : MonoBehaviour
     public int startingLives = 3;
     public int CurrentLives { get; private set; }
 
+    [Header("Webcam Tracking")]
+    [Tooltip("When enabled, uses ML pose estimation (Sentis + MoveNet) instead of " +
+             "background subtraction for webcam tracking.")]
+    public bool useMLPoseTracking = false;
+
+    [Tooltip("The background-subtraction webcam provider.")]
+    [SerializeField] private WebcamInputProvider _webcamInput;
+
+    [Tooltip("The ML pose estimation provider.")]
+    [SerializeField] private PoseInputProvider _poseInput;
     [Header("Speed Settings")]
     public float baseSpeed = 10f;
     public float currentSpeed;
@@ -123,6 +133,23 @@ public class GameManager : MonoBehaviour
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
+
+        ApplyTrackingMode();
+    }
+
+    /// <summary>
+    /// Enables the correct webcam tracking provider based on <see cref="useMLPoseTracking"/>.
+    /// Safe to call at any time — disables the inactive provider so only one uses the camera.
+    /// </summary>
+    public void ApplyTrackingMode()
+    {
+        if (_poseInput != null)
+            _poseInput.enabled = useMLPoseTracking;
+
+        if (_webcamInput != null)
+            _webcamInput.enabled = !useMLPoseTracking;
+
+        Debug.Log($"[GameManager] Tracking mode: {(useMLPoseTracking ? "ML Pose (Sentis)" : "Background Subtraction")}");
     }
 
     private void Start()
@@ -225,6 +252,10 @@ public class GameManager : MonoBehaviour
         SetLivesHudVisible(true);
 
         Time.timeScale = 1f;
+
+        // Re-calibrate pose tracking baseline at the start of each run
+        if (_poseInput != null && _poseInput.isActiveAndEnabled)
+            _poseInput.Recalibrate();
     }
 
     public void LoseLife()

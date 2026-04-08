@@ -23,6 +23,8 @@ public class InputManager : MonoBehaviour
     [SerializeField] private KinectInputProvider kinectInput;
     [Tooltip("Webcam input provider. Used when both motionInput and kinectInput are unavailable.")]
     [SerializeField] private WebcamInputProvider webcamInput;
+    [Tooltip("ML pose input provider. Alternative to webcamInput — toggled via GameManager.")]
+    [SerializeField] private PoseInputProvider poseInput;
 
     [Header("Kinect Real World Mapping")]
     [Tooltip("Furthest left physical point the player can step to. (Meters)")]
@@ -114,7 +116,11 @@ public class InputManager : MonoBehaviour
         if (kinectInput != null && kinectInput.IsProviderAvailable)
             return kinectInput;
 
-        // 3. Webcam
+        // 3. ML Pose (webcam-based body tracking)
+        if (poseInput != null && poseInput.isActiveAndEnabled && poseInput.IsProviderAvailable)
+            return poseInput;
+
+        // 4. Webcam (background subtraction fallback)
         if (webcamInput != null && webcamInput.IsProviderAvailable)
             return webcamInput;
 

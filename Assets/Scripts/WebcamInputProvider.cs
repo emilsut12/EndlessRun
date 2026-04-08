@@ -156,9 +156,10 @@ public class WebcamInputProvider : MotionInputProvider
 
         if (!_backgroundCaptured)
         {
-            // Only start the countdown once the camera is actually delivering frames.
-            if (webcamReady)
-                _initTimer += Time.deltaTime;
+// Use unscaledDeltaTime so the timer runs even when Time.timeScale == 0
+        // (e.g. during the MainMenu state).
+        if (webcamReady)
+            _initTimer += Time.unscaledDeltaTime;
 
             // Show progress/preview in the debug texture.
             UpdateDebugTexturePreCapture();
