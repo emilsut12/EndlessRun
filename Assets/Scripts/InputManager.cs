@@ -17,16 +17,24 @@ public class InputManager : MonoBehaviour
     public float kinectMovementScale = 4.0f;
 
     [Header("Optional Providers")]
-    [Tooltip("Preferred motion provider. Webcam or Kinect providers can both plug in here.")]
+    [Tooltip("Highest-priority motion provider override. If set and available it wins over all others.")]
     [SerializeField] private MotionInputProvider motionInput;
-    [Tooltip("Link the Kinect script here")]
+    [Tooltip("Kinect input provider. Used when motionInput is unset/unavailable.")]
     [SerializeField] private KinectInputProvider kinectInput;
+    [Tooltip("Webcam input provider. Used when both motionInput and kinectInput are unavailable.")]
+    [SerializeField] private WebcamInputProvider webcamInput;
 
     [Header("Kinect Real World Mapping")]
     [Tooltip("Furthest left physical point the player can step to. (Meters)")]
     public float minRealWorldX = -1.5f;
     [Tooltip("Furthest right physical point the player can step to. (Meters)")]
     public float maxRealWorldX = 1.5f;
+
+    [Header("Webcam Normalized Boundaries")]
+    [Tooltip("Left boundary in normalized screen X (0-1). Set automatically by KinectDirectRenderer boundary boxes.")]
+    public float minNormalizedX = 0f;
+    [Tooltip("Right boundary in normalized screen X (0-1). Set automatically by KinectDirectRenderer boundary boxes.")]
+    public float maxNormalizedX = 1f;
 
     private float finalX = 0f;
 
@@ -50,9 +58,17 @@ public class InputManager : MonoBehaviour
         {
             if (activeMotionProvider.TryGetHorizontalPosition(out float horizontalPosition, out MotionHorizontalSpace positionSpace))
             {
-                float normalizedPosition = positionSpace == MotionHorizontalSpace.RealWorldMeters
-                    ? Mathf.InverseLerp(minRealWorldX, maxRealWorldX, horizontalPosition)
-                    : Mathf.Clamp01(horizontalPosition);
+                float normalizedPosition;
+                if (positionSpace == MotionHorizontalSpace.RealWorldMeters)
+                {
+                    normalizedPosition = Mathf.InverseLerp(minRealWorldX, maxRealWorldX, horizontalPosition);
+                }
+                else
+                {
+                    // Remap the 0-1 centroid through the normalized boundary positions
+                    // so that the Display 2 boundary boxes control the webcam play area.
+                    normalizedPosition = Mathf.InverseLerp(minNormalizedX, maxNormalizedX, horizontalPosition);
+                }
 
                 finalX = Mathf.Lerp(-horizontalLimit, horizontalLimit, normalizedPosition);
                 return;
@@ -90,9 +106,18 @@ public class InputManager : MonoBehaviour
 
     private MotionInputProvider GetActiveMotionProvider()
     {
-        if (motionInput == null && kinectInput != null)
-            motionInput = kinectInput;
+        // 1. Explicit override field (highest priority)
+        if (motionInput != null && motionInput.IsProviderAvailable)
+            return motionInput;
 
-        return motionInput;
+        // 2. Kinect
+        if (kinectInput != null && kinectInput.IsProviderAvailable)
+            return kinectInput;
+
+        // 3. Webcam
+        if (webcamInput != null && webcamInput.IsProviderAvailable)
+            return webcamInput;
+
+        return null;
     }
 }

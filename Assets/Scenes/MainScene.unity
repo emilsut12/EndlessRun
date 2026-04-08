@@ -1404,8 +1404,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4cd85beaa323c884b98372c7d86ab1a1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::KinectDirectRenderer
+  webcamInput: {fileID: 943499751}
   BodySourceManager: {fileID: 943499745}
-  KinectCamera: {fileID: 147805588}
+  KinectCamera: {fileID: 0}
   LineMaterial: {fileID: 2100000, guid: f2ea145c63353784985576f08398a815, type: 2}
   mirrorView: 0
   flipY: 0
@@ -3257,7 +3258,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &865422068
 RectTransform:
   m_ObjectHideFlags: 0
@@ -3326,6 +3327,9 @@ GameObject:
   - component: {fileID: 943499747}
   - component: {fileID: 943499746}
   - component: {fileID: 943499750}
+  - component: {fileID: 943499751}
+  - component: {fileID: 943499752}
+  - component: {fileID: 943499753}
   m_Layer: 6
   m_Name: KinectDebugRig
   m_TagString: Untagged
@@ -3407,6 +3411,64 @@ MonoBehaviour:
   bodyManager: {fileID: 943499748}
   jumpHeightThreshold: 0.15
   kinectWarningUI: {fileID: 0}
+--- !u!114 &943499751
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 943499745}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e0f8bdec9e2fdb49af72e70a2962e10, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WebcamInputProvider
+  deviceIndex: 0
+  captureWidth: 160
+  captureHeight: 120
+  fps: 30
+  mirrorHorizontal: 1
+  overrideVerticalFlip: 0
+  manualFlipVertical: 0
+  backgroundCaptureDelay: 3
+  differenceThreshold: 0.15
+  minimumForegroundRatio: 0.005
+  jumpYThreshold: 0.06
+  baselineAdaptSpeed: 1.5
+--- !u!114 &943499752
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 943499745}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e20d5a5f32f75684683343035935c956, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WebcamDebugRenderer
+  webcamInput: {fileID: 943499751}
+  targetCamera: {fileID: 0}
+  showCentroid: 1
+  centroidColor: {r: 1, g: 0.8, b: 0, a: 1}
+  centroidSize: 0.04
+  centroidThickness: 0.004
+--- !u!114 &943499753
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 943499745}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6ecf7f52f7f39d47ac7befc36761630, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WebcamDisplay3
+  webcamInput: {fileID: 943499751}
+  centroidColor: {r: 1, g: 0.8, b: 0, a: 1}
+  centroidSize: 0.04
+  centroidThickness: 0.004
 --- !u!1 &963194225
 GameObject:
   m_ObjectHideFlags: 0
@@ -4070,6 +4132,7 @@ MonoBehaviour:
   kinectMovementScale: 4
   motionInput: {fileID: 0}
   kinectInput: {fileID: 943499750}
+  webcamInput: {fileID: 943499751}
   minRealWorldX: -1.5
   maxRealWorldX: 1.5
 --- !u!4 &1467908785
@@ -4101,7 +4164,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   playerTransform: {fileID: 148179586}
   renderDistance: 25
-  isGhost: 0
+  isGhost: 1
   gameSpeed: 1
   startingLives: 3
   baseSpeed: 10
@@ -4297,7 +4360,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 34.200012, y: -21.5}
+  m_AnchoredPosition: {x: 34.19995, y: -21.5}
   m_SizeDelta: {x: 100, y: 74.3}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1563366518

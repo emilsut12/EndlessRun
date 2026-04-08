@@ -280,7 +280,17 @@ public class GameManager : MonoBehaviour
 
     private void InitializeRuntimeUi()
     {
-        _mainCanvas = FindFirstObjectByType<Canvas>();
+        // Find the main UI canvas (Display 0) — not a runtime-created overlay canvas
+        // on another display (e.g. WebcamDisplay3's canvas on Display 2/3).
+        _mainCanvas = null;
+        foreach (var canvas in FindObjectsByType<Canvas>(FindObjectsSortMode.None))
+        {
+            if (canvas.targetDisplay == 0 && canvas.GetComponent<GraphicRaycaster>() != null)
+            {
+                _mainCanvas = canvas;
+                break;
+            }
+        }
         _graphicRaycaster = _mainCanvas != null ? _mainCanvas.GetComponent<GraphicRaycaster>() : null;
         _eventSystem = FindFirstObjectByType<EventSystem>();
         _uiInputModule = FindFirstObjectByType<InputSystemUIInputModule>();

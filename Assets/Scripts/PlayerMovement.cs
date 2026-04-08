@@ -117,7 +117,7 @@ public class PlayerMovement : MonoBehaviour
 
     private void Update()
     {
-        if (!isAlive || GameManager.Instance.CurrentState != GameManager.GameState.Playing)
+        if (!isAlive || GameManager.Instance == null || GameManager.Instance.CurrentState != GameManager.GameState.Playing)
             return;
 
         if (animator != null)

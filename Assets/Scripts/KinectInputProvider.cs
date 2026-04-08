@@ -28,7 +28,9 @@ public class KinectInputProvider : MotionInputProvider
     private bool isJumping = false;
 
     public override string ProviderName => "Kinect";
-    public override bool IsProviderAvailable => IsKinectInitialized;
+    // sensor.IsAvailable reflects actual hardware presence.
+    // sensor.IsOpen only means Open() was called — it is true even without a physical sensor.
+    public override bool IsProviderAvailable => IsKinectInitialized && sensor != null && sensor.IsAvailable;
 
     // Baseline tracking for jumps
     private float spineBaseBaselineY = 0f;
@@ -54,6 +56,9 @@ public class KinectInputProvider : MotionInputProvider
 
             if (sensor != null)
             {
+                // Subscribe before Open() so we never miss the first availability event
+                sensor.IsAvailableChanged += OnKinectAvailabilityChanged;
+
                 bodyFrameReader = sensor.BodyFrameSource.OpenReader();
 
                 if (!sensor.IsOpen)
@@ -62,7 +67,14 @@ public class KinectInputProvider : MotionInputProvider
                 }
 
                 IsKinectInitialized = true;
-                Debug.Log("Kinect initialized successfully.");
+
+                // sensor.IsAvailable is only true when the physical device is plugged in.
+                // sensor.IsOpen just means Open() was called — succeeds even without hardware.
+                if (sensor.IsAvailable)
+                    Debug.Log("Kinect initialized successfully.");
+                else
+                    Debug.LogWarning("KinectInputProvider: SDK found but no Kinect hardware detected. " +
+                                     "Plug in the sensor and it will connect automatically.");
             }
             else
             {
@@ -82,6 +94,14 @@ public class KinectInputProvider : MotionInputProvider
             IsKinectInitialized = false;
             if (kinectWarningUI != null) kinectWarningUI.SetActive(true);
         }
+    }
+
+    private void OnKinectAvailabilityChanged(object sender, IsAvailableChangedEventArgs e)
+    {
+        if (e.IsAvailable)
+            Debug.Log("KinectInputProvider: Kinect sensor connected and available.");
+        else
+            Debug.LogWarning("KinectInputProvider: Kinect sensor disconnected.");
     }
 
     private void Update()
@@ -109,13 +129,10 @@ public class KinectInputProvider : MotionInputProvider
 
     public float GetPlayerRealWorldX()
     {
-        // SAFEGUARD
-        if (!IsKinectInitialized || bodyManager == null) return 0f;
+        // Use the same bodies array that Update() processes to keep data in sync
+        if (!IsKinectInitialized || bodies == null) return 0f;
 
-        Windows.Kinect.Body[] data = bodyManager.GetData();
-        if (data == null) return 0f;
-
-        foreach (var body in data)
+        foreach (var body in bodies)
         {
             if (body != null && body.IsTracked)
             {
@@ -200,6 +217,8 @@ public class KinectInputProvider : MotionInputProvider
 
         if (sensor != null)
         {
+            sensor.IsAvailableChanged -= OnKinectAvailabilityChanged;
+
             if (sensor.IsOpen)
             {
                 sensor.Close();

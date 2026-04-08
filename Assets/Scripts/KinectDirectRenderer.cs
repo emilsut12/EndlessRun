@@ -9,6 +9,10 @@ using Kinect = Windows.Kinect;
 // synced live to InputManager.minRealWorldX / maxRealWorldX.
 public class KinectDirectRenderer : MonoBehaviour
 {
+    [Header("Webcam Feed")]
+    [Tooltip("Assign the WebcamInputProvider from KinectDebugRig here to show the live webcam feed on Display 2.")]
+    public WebcamInputProvider webcamInput;
+
     [Header("Kinect References")]
     public GameObject BodySourceManager;
     public Camera KinectCamera;
@@ -34,6 +38,13 @@ public class KinectDirectRenderer : MonoBehaviour
     [Tooltip("Speed for keyboard edge adjustment. Hold 1+Arrows (left edge) or 2+Arrows (right edge).")]
     public float keyboardAdjustSpeed = 0.3f;
 
+    [Header("Debug Visualization")]
+    [Tooltip("When true, shows the background-subtraction debug view (green = foreground) instead of the raw webcam feed. Toggle with D key.")]
+    public bool showDebugView = false;
+
+    [Tooltip("Flip the webcam feed vertically on Display 2.")]
+    public bool flipFeedVertically = true;
+
     // Kinect internals
     private BodySourceManager _bodyManager;
     private Kinect.CoordinateMapper _mapper;
@@ -56,6 +67,9 @@ public class KinectDirectRenderer : MonoBehaviour
 
     // Separate alpha-blended material for the transparent overlay quads
     private Material _boxMaterial;
+
+    // Unlit material for blitting the webcam texture fullscreen
+    private Material _webcamMat;
 
     // Full Kinect v2 skeleton bone connectivity (child → parent)
     private static readonly Dictionary<Kinect.JointType, Kinect.JointType> BoneMap =
@@ -109,9 +123,10 @@ public class KinectDirectRenderer : MonoBehaviour
 
     void Start()
     {
-        var sensor = Kinect.KinectSensor.GetDefault();
-        if (sensor != null)
-            _mapper = sensor.CoordinateMapper;
+        // Kinect sensor access is wrapped in a separate method to prevent the JIT
+        // compiler from crashing when the Kinect SDK runtime is not installed.
+        // This is the same pattern used by KinectInputProvider.
+        InitializeKinectSafe();
 
         if (BodySourceManager != null)
             _bodyManager = BodySourceManager.GetComponent<BodySourceManager>();
@@ -121,6 +136,22 @@ public class KinectDirectRenderer : MonoBehaviour
             KinectCamera.targetDisplay = 1;
 
         CreateBoxMaterial();
+        CreateWebcamMaterial();
+    }
+
+    private void InitializeKinectSafe()
+    {
+        try
+        {
+            var sensor = Kinect.KinectSensor.GetDefault();
+            if (sensor != null)
+                _mapper = sensor.CoordinateMapper;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"KinectDirectRenderer: Could not initialize Kinect sensor. " +
+                             $"Skeleton overlay will be unavailable. ({e.GetType().Name}: {e.Message})");
+        }
     }
 
     void Update()
@@ -130,6 +161,15 @@ public class KinectDirectRenderer : MonoBehaviour
 
         UpdatePlayerDepth();
         InitBoundariesOnce();
+
+        // Toggle debug view with D key
+        if (Input.GetKeyDown(KeyCode.D))
+        {
+            showDebugView = !showDebugView;
+            Debug.Log($"[KinectDirectRenderer] Debug view: {(showDebugView ? "ON (foreground mask)" : "OFF (raw webcam)")}");
+        }
+
+
 
         if (showBoundaryBoxes)
         {
@@ -142,6 +182,8 @@ public class KinectDirectRenderer : MonoBehaviour
     {
         if (_boxMaterial != null)
             DestroyImmediate(_boxMaterial);
+        if (_webcamMat != null)
+            DestroyImmediate(_webcamMat);
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -157,6 +199,17 @@ public class KinectDirectRenderer : MonoBehaviour
         _boxMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
         _boxMaterial.SetInt("_Cull",     (int)UnityEngine.Rendering.CullMode.Off);
         _boxMaterial.SetInt("_ZWrite",   0);
+    }
+
+    private void CreateWebcamMaterial()
+    {
+        // Custom shader with ZTest Always — Unlit/Texture has hardcoded ZTest LEqual
+        // which caused the webcam quad to be hidden behind scene geometry (VideoScreen).
+        Shader s = Shader.Find("Hidden/WebcamBlit");
+        if (s != null)
+            _webcamMat = new Material(s) { hideFlags = HideFlags.HideAndDontSave };
+        else
+            Debug.LogWarning("KinectDirectRenderer: Could not find Hidden/WebcamBlit shader.");
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -374,6 +427,11 @@ public class KinectDirectRenderer : MonoBehaviour
         InputManager.Instance.minRealWorldX = Mathf.Min(leftRealX, rightRealX);
         InputManager.Instance.maxRealWorldX = Mathf.Max(leftRealX, rightRealX);
 
+        // Also sync the normalized screen-space boundaries so the webcam
+        // centroid (which reports NormalizedScreenX) is correctly remapped.
+        InputManager.Instance.minNormalizedX = Mathf.Min(_leftEdgeNormX, _rightEdgeNormX);
+        InputManager.Instance.maxNormalizedX = Mathf.Max(_leftEdgeNormX, _rightEdgeNormX);
+
         // Persist so boundaries survive scene reloads and game restarts
         PlayerPrefs.SetFloat(PrefKeyLeftEdge,  _leftEdgeNormX);
         PlayerPrefs.SetFloat(PrefKeyRightEdge, _rightEdgeNormX);
@@ -440,6 +498,73 @@ public class KinectDirectRenderer : MonoBehaviour
 
     void OnPostRender()
     {
+        // ── Webcam feed — drawn first so everything else appears on top ──────────
+        // Uses Hidden/WebcamBlit shader (ZTest Always) so the quad is never
+        // occluded by scene geometry. NEVER use Graphics.Blit(tex, null) in
+        // OnPostRender — it targets Display 1's backbuffer and breaks all
+        // subsequent GL draws on this camera.
+        if (_webcamMat != null && webcamInput != null && webcamInput.IsWebcamRunning)
+        {
+            Texture rawTex = showDebugView
+                ? (Texture)webcamInput.GetDebugTexture() ?? webcamInput.GetRawTexture()
+                : webcamInput.GetRawTexture();
+            if (rawTex != null && rawTex.width > 1)
+            {
+                bool flipH = webcamInput.mirrorHorizontal;
+                bool flipV = (rawTex is WebCamTexture wct) && !webcamInput.overrideVerticalFlip
+                           ? wct.videoVerticallyMirrored
+                           : webcamInput.manualFlipVertical;
+
+                // Allow runtime override from the F key toggle
+                if (flipFeedVertically)
+                    flipV = !flipV;
+
+                // Aspect-fill: crop sides or top/bottom so the image fills
+                // the screen without stretching.
+                float texAspect    = (float)rawTex.width / rawTex.height;
+                float screenW      = KinectCamera != null ? KinectCamera.pixelWidth  : Screen.width;
+                float screenH      = KinectCamera != null ? KinectCamera.pixelHeight : Screen.height;
+                float screenAspect = screenW / screenH;
+
+                float uMin = 0f, uMax = 1f, vMin = 0f, vMax = 1f;
+                if (texAspect > screenAspect)
+                {
+                    // Texture is wider — crop sides
+                    float visibleFraction = screenAspect / texAspect;
+                    float offset = (1f - visibleFraction) * 0.5f;
+                    uMin = offset;
+                    uMax = 1f - offset;
+                }
+                else
+                {
+                    // Texture is taller — crop top/bottom
+                    float visibleFraction = texAspect / screenAspect;
+                    float offset = (1f - visibleFraction) * 0.5f;
+                    vMin = offset;
+                    vMax = 1f - offset;
+                }
+
+                // Apply flip by swapping min/max
+                float u0 = flipH ? uMax : uMin;
+                float u1 = flipH ? uMin : uMax;
+                float v0 = flipV ? vMax : vMin;
+                float v1 = flipV ? vMin : vMax;
+
+                _webcamMat.mainTexture = rawTex;
+                _webcamMat.SetPass(0);
+                GL.PushMatrix();
+                GL.LoadOrtho();
+                GL.Begin(GL.QUADS);
+                GL.Color(Color.white);
+                GL.TexCoord2(u0, v0); GL.Vertex3(0f, 0f, 0f);
+                GL.TexCoord2(u1, v0); GL.Vertex3(1f, 0f, 0f);
+                GL.TexCoord2(u1, v1); GL.Vertex3(1f, 1f, 0f);
+                GL.TexCoord2(u0, v1); GL.Vertex3(0f, 1f, 0f);
+                GL.End();
+                GL.PopMatrix();
+            }
+        }
+
         if (LineMaterial == null) return;
 
         // Boundary overlays first (drawn behind the skeleton)
