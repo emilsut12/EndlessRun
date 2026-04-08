@@ -71,9 +71,6 @@ public class KinectDirectRenderer : MonoBehaviour
     // Unlit material for blitting the webcam texture fullscreen
     private Material _webcamMat;
 
-    // Letterbox bounds — cached so skeleton overlay can match the webcam quad position
-    private float _letterboxXMin, _letterboxXMax, _letterboxYMin, _letterboxYMax;
-
     // Full Kinect v2 skeleton bone connectivity (child → parent)
     private static readonly Dictionary<Kinect.JointType, Kinect.JointType> BoneMap =
         new Dictionary<Kinect.JointType, Kinect.JointType>()
@@ -571,12 +568,6 @@ public class KinectDirectRenderer : MonoBehaviour
                     qxMax = 1f - barSize;
                 }
 
-                // Cache for skeleton overlay alignment
-                _letterboxXMin = qxMin;
-                _letterboxXMax = qxMax;
-                _letterboxYMin = qyMin;
-                _letterboxYMax = qyMax;
-
                 // UV is full texture, flip by swapping
                 float u0 = flipH ? 1f : 0f;
                 float u1 = flipH ? 0f : 1f;
@@ -671,12 +662,6 @@ public class KinectDirectRenderer : MonoBehaviour
         float minConf = poseInput.minimumConfidence;
         bool mirror = poseInput.mirrorHorizontal;
 
-        // Map keypoint 0-1 coords into the letterboxed quad region
-        float lxMin = _letterboxXMin;
-        float lxMax = _letterboxXMax;
-        float lyMin = _letterboxYMin;
-        float lyMax = _letterboxYMax;
-
         LineMaterial.SetPass(0);
         GL.PushMatrix();
         GL.LoadOrtho();
@@ -690,23 +675,17 @@ public class KinectDirectRenderer : MonoBehaviour
             if (kps[i1].z < minConf || kps[i2].z < minConf) continue;
 
             float x1 = mirror ? (1f - kps[i1].x) : kps[i1].x;
-            float y1 = 1f - kps[i1].y;
+            float y1 = 1f - kps[i1].y; // model Y is top-down, GL is bottom-up
             float x2 = mirror ? (1f - kps[i2].x) : kps[i2].x;
             float y2 = 1f - kps[i2].y;
 
-            // Remap from 0-1 texture space into letterboxed screen space
-            x1 = Mathf.Lerp(lxMin, lxMax, x1);
-            y1 = Mathf.Lerp(lyMin, lyMax, y1);
-            x2 = Mathf.Lerp(lxMin, lxMax, x2);
-            y2 = Mathf.Lerp(lyMin, lyMax, y2);
-
-            GL.Color(new Color(0f, 0.8f, 1f, 0.9f));
+            GL.Color(new Color(0f, 0.8f, 1f, 0.9f)); // cyan
             GL.Vertex3(x1, y1, 0f);
             GL.Vertex3(x2, y2, 0f);
         }
         GL.End();
 
-        // Draw keypoint dots as small quads
+        // Draw keypoint dots as small quads (GL.LINES can't draw points)
         GL.Begin(GL.QUADS);
         float dotSize = 0.006f;
         for (int i = 0; i < 17; i++)
@@ -715,9 +694,8 @@ public class KinectDirectRenderer : MonoBehaviour
 
             float x = mirror ? (1f - kps[i].x) : kps[i].x;
             float y = 1f - kps[i].y;
-            x = Mathf.Lerp(lxMin, lxMax, x);
-            y = Mathf.Lerp(lyMin, lyMax, y);
 
+            // Hip keypoints = green (shows tracking source), others = red
             Color dotColor = (i == 11 || i == 12)
                 ? new Color(0f, 1f, 0.3f, 1f)
                 : new Color(1f, 0.2f, 0.2f, 1f);

@@ -71,15 +71,15 @@ public class PoseInputProvider : MotionInputProvider
     [Tooltip("How quickly the tracked position catches up to the raw value. " +
              "Higher = more responsive but jittery; lower = smoother but laggier.")]
     [Range(2f, 50f)]
-    public float positionSmoothSpeed = 30f;
+    public float positionSmoothSpeed = 15f;
 
     [Tooltip("One-euro filter: minimum cutoff frequency. Lower = smoother when still.")]
     [Range(0.1f, 5f)]
-    public float filterMinCutoff = 1.5f;
+    public float filterMinCutoff = 0.7f;
 
     [Tooltip("One-euro filter: speed coefficient. Higher = less lag when moving fast.")]
-    [Range(0.001f, 0.5f)]
-    public float filterBeta = 0.05f;
+    [Range(0.001f, 0.1f)]
+    public float filterBeta = 0.01f;
 
     [Header("Jump Calibration")]
     [Tooltip("Seconds after a jump ends before the baseline starts adapting again. " +
@@ -192,8 +192,10 @@ public class PoseInputProvider : MotionInputProvider
 
     private void OnEnable()
     {
+        Debug.Log("[PoseInputProvider] OnEnable called");
         StartWebcam();
         InitializeModel();
+        Debug.Log($"[PoseInputProvider] After init: _isInitialized={_isInitialized}, webcam={(_webcamTexture != null ? _webcamTexture.isPlaying.ToString() : "null")}");
     }
 
     private void OnDisable()
@@ -210,22 +212,41 @@ public class PoseInputProvider : MotionInputProvider
         _calibrationSamples = 0;
     }
 
+    private float _debugLogTimer;
     private void Update()
     {
         if (!_isInitialized || _webcamTexture == null || !_webcamTexture.isPlaying)
+        {
+            _debugLogTimer += Time.unscaledDeltaTime;
+            if (_debugLogTimer > 3f)
+            {
+                Debug.Log($"[PoseInputProvider] Update early-out: init={_isInitialized}, tex={(_webcamTexture != null)}, playing={(_webcamTexture != null && _webcamTexture.isPlaying)}");
+                _debugLogTimer = 0f;
+            }
             return;
+        }
 
         if (!_webcamTexture.didUpdateThisFrame)
             return;
 
         if (!_webcamHasDeliveredFrame)
+        {
             _webcamHasDeliveredFrame = true;
+            Debug.Log("[PoseInputProvider] First webcam frame received");
+        }
 
         _frameCounter++;
         if (_frameCounter % inferenceInterval == 0)
         {
             RunInference();
             ExtractTracking();
+
+            _debugLogTimer += Time.unscaledDeltaTime;
+            if (_debugLogTimer > 3f)
+            {
+                Debug.Log($"[PoseInputProvider] Tracked={_isTracked}, hipLConf={_keypoints[LEFT_HIP].z:F2}, hipRConf={_keypoints[RIGHT_HIP].z:F2}, shlLConf={_keypoints[LEFT_SHOULDER].z:F2}, shlRConf={_keypoints[RIGHT_SHOULDER].z:F2}, posX={_positionX:F3}");
+                _debugLogTimer = 0f;
+            }
         }
 
         UpdateDebugTexture();

@@ -1405,8 +1405,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::KinectDirectRenderer
   webcamInput: {fileID: 943499751}
+  poseInput: {fileID: 943499754}
   BodySourceManager: {fileID: 943499745}
-  KinectCamera: {fileID: 0}
+  KinectCamera: {fileID: 147805588}
   LineMaterial: {fileID: 2100000, guid: f2ea145c63353784985576f08398a815, type: 2}
   mirrorView: 0
   flipY: 0
@@ -1418,6 +1419,7 @@ MonoBehaviour:
   edgeThickness: 0.002
   edgeGrabDistance: 0.02
   keyboardAdjustSpeed: 0.3
+  showDebugView: 0
 --- !u!1 &148179582
 GameObject:
   m_ObjectHideFlags: 0
@@ -3330,6 +3332,7 @@ GameObject:
   - component: {fileID: 943499751}
   - component: {fileID: 943499752}
   - component: {fileID: 943499753}
+  - component: {fileID: 943499754}
   m_Layer: 6
   m_Name: KinectDebugRig
   m_TagString: Untagged
@@ -3418,7 +3421,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 943499745}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1e0f8bdec9e2fdb49af72e70a2962e10, type: 3}
   m_Name: 
@@ -3466,9 +3469,41 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WebcamDisplay3
   webcamInput: {fileID: 943499751}
-  centroidColor: {r: 1, g: 0.8, b: 0, a: 1}
+  centroidColor:
+    r: 1
+    g: 0.8
+    b: 0
+    a: 1
   centroidSize: 0.04
   centroidThickness: 0.004
+--- !u!114 &943499754
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 943499745}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d72cc7d458999464ea8b0f9c00a875a6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PoseInputProvider
+  deviceIndex: 0
+  captureWidth: 320
+  captureHeight: 240
+  fps: 30
+  mirrorHorizontal: 1
+  modelAsset: {fileID: 5022602860645237092, guid: c8c9344345ef6964e9cfdbbabe6dd79a, type: 3}
+  inferenceInterval: 1
+  useGPU: 1
+  minimumConfidence: 0.3
+  jumpYThreshold: 0.06
+  baselineAdaptSpeed: 1.5
+  positionSmoothSpeed: 15
+  filterMinCutoff: 0.7
+  filterBeta: 0.01
+  jumpCooldown: 0.5
+  calibrationDuration: 1.5
 --- !u!1 &963194225
 GameObject:
   m_ObjectHideFlags: 0
@@ -4133,8 +4168,11 @@ MonoBehaviour:
   motionInput: {fileID: 0}
   kinectInput: {fileID: 943499750}
   webcamInput: {fileID: 943499751}
+  poseInput: {fileID: 943499754}
   minRealWorldX: -1.5
   maxRealWorldX: 1.5
+  minNormalizedX: 0
+  maxNormalizedX: 1
 --- !u!4 &1467908785
 Transform:
   m_ObjectHideFlags: 0
@@ -4164,9 +4202,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   playerTransform: {fileID: 148179586}
   renderDistance: 25
-  isGhost: 1
+  isGhost: 0
   gameSpeed: 1
   startingLives: 3
+  useMLPoseTracking: 1
+  _webcamInput: {fileID: 943499751}
+  _poseInput: {fileID: 943499754}
   baseSpeed: 10
   currentSpeed: 0
   maxSpeed: 30

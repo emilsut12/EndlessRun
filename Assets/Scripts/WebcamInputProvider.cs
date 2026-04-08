@@ -123,14 +123,14 @@ public class WebcamInputProvider : MotionInputProvider
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
-    private void Awake()
+    private void OnEnable()
     {
         TryInitializeWebcam();
     }
 
-    private void Start()
+    private void OnDisable()
     {
-        // Webcam is now initialized in Awake for earliest possible start.
+        StopAndReleaseWebcam();
     }
 
     private void Update()
@@ -180,11 +180,24 @@ public class WebcamInputProvider : MotionInputProvider
 
     private void OnDestroy()
     {
-        if (_webcamTexture != null && _webcamTexture.isPlaying)
-            _webcamTexture.Stop();
+        StopAndReleaseWebcam();
 
         if (_debugTexture != null)
             Destroy(_debugTexture);
+    }
+
+    private void StopAndReleaseWebcam()
+    {
+        if (_webcamTexture != null)
+        {
+            if (_webcamTexture.isPlaying) _webcamTexture.Stop();
+            Destroy(_webcamTexture);
+            _webcamTexture = null;
+        }
+        _isInitialized = false;
+        _webcamHasDeliveredFrame = false;
+        _backgroundCaptured = false;
+        _initTimer = 0f;
     }
 
     // ── Initialisation ────────────────────────────────────────────────────────────
