@@ -31,6 +31,11 @@ public class PlayerMovement : MonoBehaviour
     [Header("Animations")]
     [SerializeField] private Animator animator;
 
+    [Header("Horizontal Smoothing")]
+    [Tooltip("SmoothDamp time for lateral movement. Eliminates pose-tracking jitter without adding noticeable lag. 0.03-0.08 recommended.")]
+    public float horizontalSmoothTime = 0.05f;
+
+    private float _xVelocity = 0f;
     private float jumpCooldown = 0.5f;
     private float lastJumpTime = 0f;
     private bool grounded;
@@ -93,25 +98,24 @@ public class PlayerMovement : MonoBehaviour
         // Clamp horizontal movements
         targetX = Mathf.Clamp(targetX, -InputManager.Instance.horizontalLimit, InputManager.Instance.horizontalLimit);
 
-        // Calculate the distance to the target lane
-        float horizontalMove = targetX - rb.position.x;
-
-        // Set a deadzone
-        float sideAnimValue = 0f;
-        if (Mathf.Abs(horizontalMove) > 0.05f)
-        {
-            sideAnimValue = Mathf.Sign(horizontalMove);
-        }
+        // Smooth lateral movement with SmoothDamp so small pose oscillations don't
+        // produce physical jitter. The velocity output is already smoothed and scaled,
+        // making it a much better animation signal than Mathf.Sign(diff).
+        float smoothedX = Mathf.SmoothDamp(
+            rb.position.x, targetX, ref _xVelocity,
+            horizontalSmoothTime, float.MaxValue, Time.fixedDeltaTime);
 
         Vector3 newPosition = rb.position + forwardMove;
-        newPosition.x = targetX;
+        newPosition.x = smoothedX;
 
         rb.MovePosition(newPosition);
 
-        // Trigger animations
+        // Drive SideSpeed proportionally from velocity — gives a continuous blend
+        // instead of hard -1/0/+1 snapping that caused stop-start animation jitter.
         if (animator != null)
         {
-            animator.SetFloat("SideSpeed", sideAnimValue, 0.05f, Time.fixedDeltaTime);
+            float normVelocity = Mathf.Clamp(_xVelocity / (InputManager.Instance.horizontalLimit * 2f), -1f, 1f);
+            animator.SetFloat("SideSpeed", normVelocity, 0.05f, Time.fixedDeltaTime);
         }
     }
 

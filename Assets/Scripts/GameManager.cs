@@ -291,6 +291,11 @@ public class GameManager : MonoBehaviour
 
     public void RestartGame()
     {
+        // Release webcam hardware before reloading the scene so the new
+        // providers don't race with the OS device handle still being held.
+        if (_poseInput != null)  _poseInput.enabled  = false;
+        if (_webcamInput != null) _webcamInput.enabled = false;
+
         Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }

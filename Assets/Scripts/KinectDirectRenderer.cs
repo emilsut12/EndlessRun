@@ -71,6 +71,10 @@ public class KinectDirectRenderer : MonoBehaviour
     // Unlit material for blitting the webcam texture fullscreen
     private Material _webcamMat;
 
+    // Cached letterbox rect for the webcam feed (GL ortho space, 0-1).
+    // DrawPoseSkeleton uses this so the skeleton keypoints align with the image.
+    private float _lbXMin = 0f, _lbXMax = 1f, _lbYMin = 0f, _lbYMax = 1f;
+
     // Full Kinect v2 skeleton bone connectivity (child → parent)
     private static readonly Dictionary<Kinect.JointType, Kinect.JointType> BoneMap =
         new Dictionary<Kinect.JointType, Kinect.JointType>()
@@ -574,6 +578,9 @@ public class KinectDirectRenderer : MonoBehaviour
                 float v0 = flipV ? 1f : 0f;
                 float v1 = flipV ? 0f : 1f;
 
+                // Cache the letterbox rect so DrawPoseSkeleton can align the skeleton
+                _lbXMin = qxMin; _lbXMax = qxMax; _lbYMin = qyMin; _lbYMax = qyMax;
+
                 _webcamMat.mainTexture = rawTex;
                 _webcamMat.SetPass(0);
                 GL.PushMatrix();
@@ -674,10 +681,11 @@ public class KinectDirectRenderer : MonoBehaviour
             int i2 = PoseBones[b, 1];
             if (kps[i1].z < minConf || kps[i2].z < minConf) continue;
 
-            float x1 = mirror ? (1f - kps[i1].x) : kps[i1].x;
-            float y1 = 1f - kps[i1].y; // model Y is top-down, GL is bottom-up
-            float x2 = mirror ? (1f - kps[i2].x) : kps[i2].x;
-            float y2 = 1f - kps[i2].y;
+            // Remap from texture-space (0-1) into the letterboxed screen region
+            float x1 = _lbXMin + (mirror ? (1f - kps[i1].x) : kps[i1].x) * (_lbXMax - _lbXMin);
+            float y1 = _lbYMin + (1f - kps[i1].y) * (_lbYMax - _lbYMin);
+            float x2 = _lbXMin + (mirror ? (1f - kps[i2].x) : kps[i2].x) * (_lbXMax - _lbXMin);
+            float y2 = _lbYMin + (1f - kps[i2].y) * (_lbYMax - _lbYMin);
 
             GL.Color(new Color(0f, 0.8f, 1f, 0.9f)); // cyan
             GL.Vertex3(x1, y1, 0f);
@@ -692,8 +700,8 @@ public class KinectDirectRenderer : MonoBehaviour
         {
             if (kps[i].z < minConf) continue;
 
-            float x = mirror ? (1f - kps[i].x) : kps[i].x;
-            float y = 1f - kps[i].y;
+            float x = _lbXMin + (mirror ? (1f - kps[i].x) : kps[i].x) * (_lbXMax - _lbXMin);
+            float y = _lbYMin + (1f - kps[i].y) * (_lbYMax - _lbYMin);
 
             // Hip keypoints = green (shows tracking source), others = red
             Color dotColor = (i == 11 || i == 12)

@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using Unity.InferenceEngine;
 
@@ -49,8 +50,14 @@ public class PoseInputProvider : MotionInputProvider
     [Range(1, 10)]
     public int inferenceInterval = 1;
 
-    [Tooltip("Use GPU for inference. Disable to fall back to CPU if you have issues.")]
-    public bool useGPU = true;
+    [Tooltip("Use GPU for inference. Disable to fall back to CPU. For small models like MoveNet, "
+             + "CPU is often faster because it avoids GPU pipeline stall on synchronous readback.")]
+    public bool useGPU = false;
+
+    [Header("Model Input Size")]
+    [Tooltip("Resolution the webcam frame is resized to before inference. "
+             + "MoveNet Lightning = 192, MoveNet Thunder = 256. Change this when you swap models.")]
+    public int modelInputSize = 192;
 
     [Header("Tracking")]
     [Tooltip("Minimum keypoint confidence (0-1) to consider a detection valid.")]
@@ -68,18 +75,9 @@ public class PoseInputProvider : MotionInputProvider
     public float baselineAdaptSpeed = 1.5f;
 
     [Header("Smoothing")]
-    [Tooltip("How quickly the tracked position catches up to the raw value. " +
-             "Higher = more responsive but jittery; lower = smoother but laggier.")]
+    [Tooltip("How quickly the tracked shoulder Y catches up for jump detection. Higher = more responsive.")]
     [Range(2f, 50f)]
     public float positionSmoothSpeed = 15f;
-
-    [Tooltip("One-euro filter: minimum cutoff frequency. Lower = smoother when still.")]
-    [Range(0.1f, 5f)]
-    public float filterMinCutoff = 0.7f;
-
-    [Tooltip("One-euro filter: speed coefficient. Higher = less lag when moving fast.")]
-    [Range(0.001f, 0.1f)]
-    public float filterBeta = 0.01f;
 
     [Header("Jump Calibration")]
     [Tooltip("Seconds after a jump ends before the baseline starts adapting again. " +
@@ -144,12 +142,6 @@ public class PoseInputProvider : MotionInputProvider
     private bool  _isBaselineSet;
     private bool  _isJumping;
 
-    // One-euro filter state (for horizontal position)
-    private float _filteredX = 0.5f;
-    private float _dxFiltered = 0f;
-    private float _prevRawX = 0.5f;
-    private bool  _filterInitialized;
-
     // Jump cooldown / calibration
     private float _jumpCooldownTimer;
     private float _calibrationTimer;
@@ -193,19 +185,27 @@ public class PoseInputProvider : MotionInputProvider
     private void OnEnable()
     {
         Debug.Log("[PoseInputProvider] OnEnable called");
-        StartWebcam();
         InitializeModel();
+        StartCoroutine(StartWebcamDelayed());
+    }
+
+    private IEnumerator StartWebcamDelayed()
+    {
+        // Wait one frame so the OS has time to release the device handle
+        // from any previous provider that was just destroyed/disabled.
+        yield return null;
+        StartWebcam();
         Debug.Log($"[PoseInputProvider] After init: _isInitialized={_isInitialized}, webcam={(_webcamTexture != null ? _webcamTexture.isPlaying.ToString() : "null")}");
     }
 
     private void OnDisable()
     {
+        StopAllCoroutines();
         StopWebcam();
         CleanupModel();
         _isInitialized = false;
         _isTracked = false;
         _isBaselineSet = false;
-        _filterInitialized = false;
         _calibrated = false;
         _calibrationTimer = 0f;
         _calibrationAccumY = 0f;
@@ -307,10 +307,26 @@ public class PoseInputProvider : MotionInputProvider
         var backend = useGPU ? BackendType.GPUCompute : BackendType.CPU;
         _worker = new Worker(_runtimeModel, backend);
 
-        _inferenceRT = RenderTexture.GetTemporary(192, 192, 0, RenderTextureFormat.ARGB32);
+        // Auto-detect input size from the model so Lightning (192) and Thunder (256)
+        // both work without touching the Inspector. The inspector field is kept as a
+        // visible read-only hint but the runtime value always wins.
+        if (_runtimeModel.inputs.Count > 0)
+        {
+            var inputShape = _runtimeModel.inputs[0].shape;
+            // NHWC: [batch, height, width, channels] — Get(axis) returns -1 for dynamic dims
+            int detectedH = inputShape.Get(1);
+            int detectedW = inputShape.Get(2);
+            if (detectedH > 1 && detectedW > 1)
+            {
+                modelInputSize = detectedH; // H == W for MoveNet
+                Debug.Log($"PoseInputProvider: Auto-detected model input size: {modelInputSize}x{modelInputSize}");
+            }
+        }
+
+        _inferenceRT = RenderTexture.GetTemporary(modelInputSize, modelInputSize, 0, RenderTextureFormat.ARGB32);
 
         _isInitialized = true;
-        Debug.Log($"PoseInputProvider: Model loaded ({backend}). Ready for inference.");
+        Debug.Log($"PoseInputProvider: Model loaded ({backend}), input size {modelInputSize}x{modelInputSize}. Ready for inference.");
     }
 
     private void CleanupModel()
@@ -335,17 +351,16 @@ public class PoseInputProvider : MotionInputProvider
     {
         if (_worker == null || _webcamTexture == null) return;
 
-        // Resize webcam frame to 192x192 for MoveNet input
+        // Resize webcam frame to model input size
         Graphics.Blit(_webcamTexture, _inferenceRT);
 
-        // TextureConverter requires a pre-allocated tensor and explicit transform.
-        // MoveNet (TFLite-exported ONNX) expects int32 [1, 192, 192, 3] in NHWC layout, 0-255.
-        using var floatTensor = new Tensor<float>(new TensorShape(1, 192, 192, 3));
+        // MoveNet expects int32 [1, H, W, 3] in NHWC layout, values 0-255.
+        using var floatTensor = new Tensor<float>(new TensorShape(1, modelInputSize, modelInputSize, 3));
         var transform = new TextureTransform().SetTensorLayout(TensorLayout.NHWC);
         TextureConverter.ToTensor(_inferenceRT, floatTensor, transform);
 
         // Convert float 0-1 → int 0-255
-        using var intTensor = new Tensor<int>(new TensorShape(1, 192, 192, 3));
+        using var intTensor = new Tensor<int>(new TensorShape(1, modelInputSize, modelInputSize, 3));
         var floatData = floatTensor.DownloadToArray();
         var intData = new int[floatData.Length];
         for (int i = 0; i < floatData.Length; i++)
@@ -392,6 +407,8 @@ public class PoseInputProvider : MotionInputProvider
         {
             _isJumping = false;
             _isBaselineSet = false;
+            // Hold _positionX at last known value — don't freeze/reset, so the player
+            // model keeps its position during brief tracking loss (e.g. during fast motion).
             return;
         }
 
@@ -402,30 +419,12 @@ public class PoseInputProvider : MotionInputProvider
         float shlMidX = (_keypoints[LEFT_SHOULDER].x + _keypoints[RIGHT_SHOULDER].x) * 0.5f;
         _rawPositionX = hipMidX * 0.6f + shlMidX * 0.4f;
 
-        // One-euro filter: adapts smoothing based on movement speed.
-        // Standing still → heavy smoothing (no jitter). Moving fast → minimal lag.
-        float dt = Time.unscaledDeltaTime;
-        if (!_filterInitialized)
-        {
-            _filteredX = _rawPositionX;
-            _prevRawX = _rawPositionX;
-            _dxFiltered = 0f;
-            _filterInitialized = true;
-        }
-        else
-        {
-            float dx = (_rawPositionX - _prevRawX) / Mathf.Max(dt, 0.001f);
-            float edx = OneEuroAlpha(dt, 1.0f);
-            _dxFiltered = Mathf.Lerp(_dxFiltered, dx, edx);
-
-            float cutoff = filterMinCutoff + filterBeta * Mathf.Abs(_dxFiltered);
-            float alpha = OneEuroAlpha(dt, cutoff);
-            _filteredX = Mathf.Lerp(_filteredX, _rawPositionX, alpha);
-            _prevRawX = _rawPositionX;
-        }
-        _positionX = _filteredX;
+        // Pass the torso centroid through directly — smoothing happens once in
+        // PlayerMovement.SmoothDamp so we don't stack multiple lag sources.
+        _positionX = _rawPositionX;
 
         // ── Vertical position for jump ───────────────────────────────────────────
+        float dt = Time.unscaledDeltaTime;
         _rawShoulderY = 1f - (_keypoints[LEFT_SHOULDER].y + _keypoints[RIGHT_SHOULDER].y) * 0.5f;
         float tY = positionSmoothSpeed * dt;
         _shoulderY = Mathf.Lerp(_shoulderY, _rawShoulderY, Mathf.Clamp01(tY));
@@ -473,13 +472,7 @@ public class PoseInputProvider : MotionInputProvider
         }
     }
 
-    // One-euro filter smoothing factor for a given dt and cutoff frequency.
-    private static float OneEuroAlpha(float dt, float cutoff)
-    {
-        float tau = 1f / (2f * Mathf.PI * cutoff);
-        return 1f / (1f + tau / Mathf.Max(dt, 0.0001f));
-    }
-
+    // Update the Y tracking for jump detection only — one smooth step per frame.
     /// <summary>
     /// Resets the jump calibration so the baseline is re-measured.
     /// Call this when the game starts playing.

@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -125,11 +126,20 @@ public class WebcamInputProvider : MotionInputProvider
 
     private void OnEnable()
     {
+        StartCoroutine(InitializeWebcamDelayed());
+    }
+
+    private IEnumerator InitializeWebcamDelayed()
+    {
+        // Wait one frame so the OS has time to release the device handle
+        // from any previous provider that was just destroyed/disabled.
+        yield return null;
         TryInitializeWebcam();
     }
 
     private void OnDisable()
     {
+        StopAllCoroutines();
         StopAndReleaseWebcam();
     }
 
