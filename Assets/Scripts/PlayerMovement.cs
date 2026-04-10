@@ -132,7 +132,7 @@ public class PlayerMovement : MonoBehaviour
 
         animator?.SetBool("isGrounded", grounded);
 
-        if (InputManager.Instance.GetJumpInput() && grounded && Time.time > lastJumpTime + jumpCooldown)
+        if (GameManager.Instance.jumpEnabled && InputManager.Instance.GetJumpInput() && grounded && Time.time > lastJumpTime + jumpCooldown)
         {
             Jump();
         }

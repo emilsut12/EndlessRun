@@ -1589,6 +1589,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 128
   animator: {fileID: 1670043896}
+  horizontalSmoothTime: 0.05
   opaqueMaterial: {fileID: 2813316624091176714, guid: 7a318391d7273754c8106514a8f88bb8, type: 3}
   fadeMaterial: {fileID: 2100000, guid: 0edaebfbcd697454da04ae17eb2ea2d1, type: 2}
 --- !u!1 &156733177
@@ -3438,6 +3439,8 @@ MonoBehaviour:
   minimumForegroundRatio: 0.005
   jumpYThreshold: 0.06
   baselineAdaptSpeed: 1.5
+  leftExclusionZone: 0
+  rightExclusionZone: 0
 --- !u!114 &943499752
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3468,14 +3471,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a6ecf7f52f7f39d47ac7befc36761630, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WebcamDisplay3
-  webcamInput: {fileID: 943499751}
-  centroidColor:
-    r: 1
-    g: 0.8
-    b: 0
-    a: 1
-  centroidSize: 0.04
-  centroidThickness: 0.004
 --- !u!114 &943499754
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3496,12 +3491,11 @@ MonoBehaviour:
   modelAsset: {fileID: 5022602860645237092, guid: c8c9344345ef6964e9cfdbbabe6dd79a, type: 3}
   inferenceInterval: 1
   useGPU: 1
+  modelInputSize: 192
   minimumConfidence: 0.3
   jumpYThreshold: 0.06
   baselineAdaptSpeed: 1.5
   positionSmoothSpeed: 15
-  filterMinCutoff: 0.7
-  filterBeta: 0.01
   jumpCooldown: 0.5
   calibrationDuration: 1.5
 --- !u!1 &963194225
@@ -4203,6 +4197,8 @@ MonoBehaviour:
   playerTransform: {fileID: 148179586}
   renderDistance: 25
   isGhost: 0
+  jumpEnabled: 0
+  jumpToggleKey: 0
   gameSpeed: 1
   startingLives: 3
   useMLPoseTracking: 1

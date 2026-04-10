@@ -68,6 +68,18 @@ public class WebcamInputProvider : MotionInputProvider
     [Range(0.5f, 5f)]
     public float baselineAdaptSpeed = 1.5f;
 
+    [Header("Side Exclusion Zones")]
+    [Tooltip("Fraction of frame width to ignore on the LEFT side (0–0.5). " +
+             "Pixels in this zone are excluded from centroid and foreground ratio — " +
+             "use this to mask areas where background people can walk into frame.")]
+    [Range(0f, 0.5f)]
+    public float leftExclusionZone = 0f;
+
+    [Tooltip("Fraction of frame width to ignore on the RIGHT side (0–0.5). " +
+             "Same as leftExclusionZone but for the right edge.")]
+    [Range(0f, 0.5f)]
+    public float rightExclusionZone = 0f;
+
     // ── Internal state ────────────────────────────────────────────────────────────
     private WebCamTexture _webcamTexture;
     private Color32[] _backgroundPixels;
@@ -280,6 +292,10 @@ public class WebcamInputProvider : MotionInputProvider
         int height = captureHeight;
         int total  = width * height;
 
+        // Compute pixel-column bounds for the active (non-excluded) zone.
+        int firstIncludedCol = Mathf.RoundToInt(leftExclusionZone  * width);
+        int lastIncludedCol  = width - Mathf.RoundToInt(rightExclusionZone * width) - 1;
+
         // Determine vertical flip: we want _centroidY=1 to mean "player is high up"
         // so that rising centroid → jump.
         bool flipVertical = overrideVerticalFlip
@@ -292,6 +308,15 @@ public class WebcamInputProvider : MotionInputProvider
 
         for (int i = 0; i < total; i++)
         {
+            int col = i % width;
+
+            // Skip pixels inside the excluded side zones entirely.
+            if (col < firstIncludedCol || col > lastIncludedCol)
+            {
+                _foregroundMask[i] = 0;
+                continue;
+            }
+
             Color32 c = _currentPixels[i];
             Color32 b = _backgroundPixels[i];
 
@@ -305,14 +330,16 @@ public class WebcamInputProvider : MotionInputProvider
 
             if (isForeground)
             {
-                sumX += i % width;
+                sumX += col;
                 sumY += i / width;
                 foregroundCount++;
             }
         }
 
-        // ── Tracking decision ─────────────────────────────────────────────────────
-        float foregroundRatio = (float)foregroundCount / total;
+        // ── Tracking decision — only count pixels inside the active zone ─────────
+        int includedColumnCount = Mathf.Max(1, lastIncludedCol - firstIncludedCol + 1);
+        float activePixels = (float)(height * includedColumnCount);
+        float foregroundRatio = (float)foregroundCount / activePixels;
         _isTracked = foregroundRatio >= minimumForegroundRatio;
 
         if (_isTracked)
@@ -412,9 +439,28 @@ public class WebcamInputProvider : MotionInputProvider
     {
         if (_debugTexture == null) return;
 
+        int width = captureWidth;
         int total = captureWidth * captureHeight;
+
+        int firstIncludedCol = Mathf.RoundToInt(leftExclusionZone  * width);
+        int lastIncludedCol  = width - Mathf.RoundToInt(rightExclusionZone * width) - 1;
+
         for (int i = 0; i < total; i++)
         {
+            int col = i % width;
+
+            // Excluded side zones — show as red overlay so you can see exactly what's masked.
+            if (col < firstIncludedCol || col > lastIncludedCol)
+            {
+                Color32 c = _currentPixels[i];
+                _debugPixels[i] = new Color32(
+                    (byte)Mathf.Min(255, c.r / 2 + 100),
+                    (byte)(c.g >> 3),
+                    (byte)(c.b >> 3),
+                    255);
+                continue;
+            }
+
             if (_foregroundMask[i] > 0)
             {
                 // Foreground: bright green

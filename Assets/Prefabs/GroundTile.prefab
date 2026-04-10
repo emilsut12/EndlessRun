@@ -352,6 +352,7 @@ MonoBehaviour:
   - {fileID: 1753537081323254125, guid: 98da75c2ba6ab9544a07ab9147bc1b60, type: 3}
   sideObstaclePrefabs:
   - {fileID: 1753537081323254125, guid: cf2732eafa7b1f7459655605d695f9b8, type: 3}
+  - {fileID: 1753537081323254125, guid: 9a956af81e65d8f4d84f5c684b1a0fba, type: 3}
   obstacleSpawnPoints:
   - {fileID: 8065879615564937502}
   - {fileID: 4971823148051947918}

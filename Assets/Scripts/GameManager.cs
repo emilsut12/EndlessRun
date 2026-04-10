@@ -47,6 +47,13 @@ public class GameManager : MonoBehaviour
     [Tooltip("Player phases through obstacles when enabled.")]
     public bool isGhost = false;
 
+    [Header("Gameplay Toggles")]
+    [Tooltip("When disabled, the player cannot jump (useful for motion-capture setups where forward lean triggers false jumps).")]
+    public bool jumpEnabled = true;
+
+    [Tooltip("Key that toggles jump on/off at runtime. Set to None to disable the hotkey.")]
+    public KeyCode jumpToggleKey = KeyCode.None;
+
     [Tooltip("Global speed multiplier applied to forward movement and obstacle scroll.")]
     [Range(0.1f, 5f)]
     public float gameSpeed = 1.0f;
@@ -194,6 +201,25 @@ public class GameManager : MonoBehaviour
                 Screen.SetResolution(Screen.currentResolution.width, Screen.currentResolution.height, FullScreenMode.FullScreenWindow);
                 PlayerPrefs.SetInt(PrefKeyFullscreen, 1);
             }
+        }
+
+        // Jump toggle hotkey
+        if (jumpToggleKey != KeyCode.None && Input.GetKeyDown(jumpToggleKey))
+            jumpEnabled = !jumpEnabled;
+
+        // Keyboard shortcuts
+        switch (CurrentState)
+        {
+            case GameState.MainMenu:
+                if (Input.GetKeyDown(KeyCode.Space)) StartGame();
+                else if (Input.GetKeyDown(KeyCode.Q)) QuitGame();
+                break;
+            case GameState.Playing:
+                if (Input.GetKeyDown(KeyCode.Q)) ShowMainMenu();
+                break;
+            case GameState.GameOver:
+                if (Input.GetKeyDown(KeyCode.R)) RestartGame();
+                break;
         }
 
         HandleMenuButtonInput();
@@ -465,7 +491,8 @@ public class GameManager : MonoBehaviour
 
             if (currentCharacter == '\n' || currentCharacter == '\r')
             {
-                SaveScore();
+                if (!string.IsNullOrEmpty(_enteredPlayerName))
+                    SaveScore();
                 return;
             }
 
