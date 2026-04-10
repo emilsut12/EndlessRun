@@ -62,6 +62,12 @@ public class GameManager : MonoBehaviour
     public int startingLives = 3;
     public int CurrentLives { get; private set; }
 
+    [Header("Build Options")]
+    [Tooltip("Disable all Kinect sensor code at runtime. Enable this when building without the " +
+             "Kinect SDK — no Kinect DLLs will be loaded. For a fully stripped build, also remove " +
+             "the Kinect plugin folder from Assets/Plugins via Platform Settings.")]
+    public bool disableKinect = false;
+
     [Header("Webcam Tracking")]
     [Tooltip("When enabled, uses ML pose estimation (Sentis + MoveNet) instead of " +
              "background subtraction for webcam tracking.")]
@@ -89,6 +95,15 @@ public class GameManager : MonoBehaviour
     [Tooltip("Resolution height used when launching in windowed mode.")]
     public int windowedHeight = 720;
 
+    [Header("Performance Settings")]
+    [Tooltip("VSync mode. 0 = off (use Target Frame Rate), 1 = sync to display refresh (recommended for projectors), 2 = half refresh rate.")]
+    [Range(0, 2)]
+    public int vSyncCount = 1;
+    [Tooltip("Target FPS cap. Only used when VSync Count is 0. Set to 60 for a projector-stable cap.")]
+    public int targetFrameRate = 60;
+    [Tooltip("Maximum distance (metres) at which shadows are rendered. Increase if shadows cut off too close to the player.")]
+    public float shadowDistance = 80f;
+
     [Header("UI Panels")]
     public GameObject startScreen;
     public GameObject gameOverScreen;
@@ -106,6 +121,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Button _restartButton;
     [SerializeField] private GameObject _continuePrompt;
     [SerializeField] private TMP_Text _continuePromptText;
+    [SerializeField] private TMP_Text _fpsText;
 
     public int CurrentScore { get; private set; }
 
@@ -130,6 +146,8 @@ public class GameManager : MonoBehaviour
     private Button _pressedButton;
 
     private float _runStartZ;
+    private float _fpsTimer = 0f;
+    private int   _fpsFrameCount = 0;
     private string _enteredPlayerName = string.Empty;
     private bool _scoreSubmitted;
     private LeaderboardData _cachedLeaderboardData = new LeaderboardData();
@@ -181,6 +199,11 @@ public class GameManager : MonoBehaviour
                 Screen.SetResolution(windowedWidth, windowedHeight, FullScreenMode.Windowed);
         }
 
+        // Apply performance settings every startup (safe to call repeatedly).
+        QualitySettings.shadowDistance = shadowDistance;
+        QualitySettings.vSyncCount = vSyncCount;
+        Application.targetFrameRate = vSyncCount == 0 ? targetFrameRate : -1;
+
         InitializeRuntimeUi();
 
         ShowMainMenu();
@@ -212,17 +235,19 @@ public class GameManager : MonoBehaviour
         {
             case GameState.MainMenu:
                 if (Input.GetKeyDown(KeyCode.Space)) StartGame();
-                else if (Input.GetKeyDown(KeyCode.Q)) QuitGame();
+                else if (Input.GetKeyDown(KeyCode.Escape)) QuitGame();
                 break;
             case GameState.Playing:
-                if (Input.GetKeyDown(KeyCode.Q)) ShowMainMenu();
+                if (Input.GetKeyDown(KeyCode.Escape)) ShowMainMenu();
                 break;
             case GameState.GameOver:
                 if (Input.GetKeyDown(KeyCode.R)) RestartGame();
+                else if (Input.GetKeyDown(KeyCode.Escape)) ShowMainMenu();
                 break;
         }
 
         HandleMenuButtonInput();
+        UpdateFpsCounter();
 
         if (CurrentState == GameState.Playing)
         {
@@ -392,6 +417,19 @@ public class GameManager : MonoBehaviour
         {
             _restartButton.onClick.RemoveListener(RestartGame);
             _restartButton.onClick.AddListener(RestartGame);
+        }
+    }
+
+    private void UpdateFpsCounter()
+    {
+        _fpsFrameCount++;
+        _fpsTimer += Time.unscaledDeltaTime;
+        if (_fpsTimer >= 0.5f)
+        {
+            if (_fpsText != null)
+                _fpsText.text = $"FPS: {Mathf.RoundToInt(_fpsFrameCount / _fpsTimer)}";
+            _fpsTimer = 0f;
+            _fpsFrameCount = 0;
         }
     }
 
@@ -819,6 +857,13 @@ public class GameManager : MonoBehaviour
 
         if (_continuePromptText == null && _continuePrompt != null)
             _continuePromptText = _continuePrompt.GetComponentInChildren<TMP_Text>(true);
+
+        if (_fpsText == null)
+        {
+            Transform fpsTransform = FindNamedDescendant(_mainCanvas.transform, "FpsText");
+            if (fpsTransform != null)
+                _fpsText = fpsTransform.GetComponent<TMP_Text>();
+        }
     }
 
     private static void AssignTextReference(ref TMP_Text targetText, Transform root, string childName)
@@ -1006,6 +1051,9 @@ public class GameManager : MonoBehaviour
         RectTransform scoreHudRect = _scoreHudRoot.GetComponent<RectTransform>();
         scoreHudRect.sizeDelta = new Vector2(220f, 48f);
         _scoreCounterText = FindOrCreateTextElement("ScoreCounter", _scoreHudRoot.transform, new Vector2(0f, -10f), new Vector2(-24f, 32f), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), 24f, FontStyles.Bold, new Color(0.2f, 0.23f, 0.32f), TextAlignmentOptions.Left, false, "Score: 0");
+
+        // FPS counter — anchored top-center, below the title area
+        _fpsText = FindOrCreateTextElement("FpsText", _mainCanvas.transform, new Vector2(0f, -12f), new Vector2(120f, 32f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), 18f, FontStyles.Normal, new Color(0.2f, 0.23f, 0.32f, 0.7f), TextAlignmentOptions.Center, false, "FPS: --");
 
         RectTransform gameOverRect = gameOverScreen.GetComponent<RectTransform>();
         _finalScoreText = FindOrCreateTextElement("FinalScoreText", gameOverRect, new Vector2(0f, 78f), new Vector2(420f, 40f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), 28f, FontStyles.Bold, new Color(0.22f, 0.25f, 0.34f), TextAlignmentOptions.Center, false, "Score: 0");

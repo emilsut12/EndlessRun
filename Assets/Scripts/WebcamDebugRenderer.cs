@@ -14,18 +14,6 @@ public class WebcamDebugRenderer : MonoBehaviour
     [Tooltip("Camera that targets Display 2. Leave empty to auto-find.")]
     public Camera targetCamera;
 
-    [Tooltip("Draw a centroid cross-hair showing where the tracker thinks the player is.")]
-    public bool showCentroid = true;
-
-    [Tooltip("Colour of the centroid cross-hair lines.")]
-    public Color centroidColor = new Color(1f, 0.8f, 0f, 1f);
-
-    [Range(0.01f, 0.15f)]
-    public float centroidSize = 0.04f;
-
-    [Range(0.001f, 0.02f)]
-    public float centroidThickness = 0.004f;
-
     private WebcamPostRenderHelper _helper;
 
     private void Awake()
@@ -54,11 +42,9 @@ public class WebcamDebugRenderer : MonoBehaviour
             return;
         }
 
-        // Add our helper directly onto the Camera''s GameObject.
-        // This is the same pattern as KinectDirectRenderer: OnPostRender() only
-        // fires as a MonoBehaviour message when the script IS ON the camera object.
+        // Add our helper directly onto the Camera's GameObject.
         _helper = targetCamera.gameObject.AddComponent<WebcamPostRenderHelper>();
-        _helper.Init(webcamInput, showCentroid, centroidColor, centroidSize, centroidThickness);
+        _helper.Init(webcamInput);
     }
 
     private void OnDestroy()
@@ -70,38 +56,17 @@ public class WebcamDebugRenderer : MonoBehaviour
 
 /// <summary>
 /// Added to the Display-2 Camera GameObject at runtime by WebcamDebugRenderer.
-/// Uses OnPostRender() (MonoBehaviour message) to draw the webcam feed fullscreen,
-/// then overlays the centroid crosshair — identical to how KinectDirectRenderer works.
+/// Uses OnPostRender() (MonoBehaviour message) to draw the webcam feed fullscreen.
 /// </summary>
 [AddComponentMenu("")]
 public class WebcamPostRenderHelper : MonoBehaviour
 {
     private WebcamInputProvider _webcamInput;
-    private bool   _showCentroid;
-    private Color  _centroidColor;
-    private float  _centroidSize;
-    private float  _centroidThickness;
-
     private Material _lineMat;
 
-    public void Init(WebcamInputProvider input, bool showCentroid,
-                     Color centroidColor, float centroidSize, float centroidThickness)
+    public void Init(WebcamInputProvider input)
     {
-        _webcamInput       = input;
-        _showCentroid      = showCentroid;
-        _centroidColor     = centroidColor;
-        _centroidSize      = centroidSize;
-        _centroidThickness = centroidThickness;
-
-        Shader lineShader = Shader.Find("Hidden/Internal-Colored");
-        if (lineShader != null)
-        {
-            _lineMat = new Material(lineShader) { hideFlags = HideFlags.HideAndDontSave };
-            _lineMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            _lineMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            _lineMat.SetInt("_Cull",     (int)UnityEngine.Rendering.CullMode.Off);
-            _lineMat.SetInt("_ZWrite",   0);
-        }
+        _webcamInput = input;
     }
 
     private void OnDestroy()
@@ -110,39 +75,8 @@ public class WebcamPostRenderHelper : MonoBehaviour
     }
 
     // OnPostRender fires because this script IS on the Camera GameObject.
-    // Only draws the centroid crosshair — the webcam feed is already drawn by
-    // KinectDirectRenderer.OnPostRender() on this same camera. Drawing it twice
-    // was covering the boundary boxes.
+    // Only draws the webcam feed — centroid tracking has been removed.
     void OnPostRender()
     {
-        if (_webcamInput == null) return;
-
-        // Draw centroid crosshair on top
-        if (_showCentroid && _webcamInput.IsTracked() && _lineMat != null)
-        {
-            Vector2 c = _webcamInput.GetCentroid();
-            float h = _centroidThickness * 0.5f;
-
-            _lineMat.SetPass(0);
-            GL.PushMatrix();
-            GL.LoadOrtho();
-            GL.Begin(GL.QUADS);
-            GL.Color(_centroidColor);
-
-            // Horizontal bar
-            GL.Vertex3(c.x - _centroidSize, c.y - h, 0f);
-            GL.Vertex3(c.x + _centroidSize, c.y - h, 0f);
-            GL.Vertex3(c.x + _centroidSize, c.y + h, 0f);
-            GL.Vertex3(c.x - _centroidSize, c.y + h, 0f);
-
-            // Vertical bar
-            GL.Vertex3(c.x - h, c.y - _centroidSize, 0f);
-            GL.Vertex3(c.x + h, c.y - _centroidSize, 0f);
-            GL.Vertex3(c.x + h, c.y + _centroidSize, 0f);
-            GL.Vertex3(c.x - h, c.y + _centroidSize, 0f);
-
-            GL.End();
-            GL.PopMatrix();
-        }
     }
 }

@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 7089028226578863444}
   - component: {fileID: 3548873547845702729}
   m_Layer: 8
-  m_Name: Obstacle
+  m_Name: Obstacle_1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -192,6 +192,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4066085460673515473, guid: 36b6168b2c1ac8c46b450971364fc399, type: 3}
       propertyPath: m_ConstrainProportionsScale
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4655661415369961173, guid: 36b6168b2c1ac8c46b450971364fc399, type: 3}
+      propertyPath: m_Enabled
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []

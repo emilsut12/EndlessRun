@@ -1,8 +1,11 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// Handles obstacle/scenery spawning and triggers the generation of the next tile.
+/// Works with GroundSpawner's pool — never destroys itself; instead clears its
+/// spawned children one-per-frame then returns to the pool.
 /// </summary>
 public class GroundTile : MonoBehaviour
 {
@@ -26,30 +29,59 @@ public class GroundTile : MonoBehaviour
 
     private static int lastDecorationIndex = -1;
 
+    // Tracks runtime-spawned children (obstacle + scenery) so they can be
+    // destroyed one-per-frame during recycling without a single-frame GC spike.
+    private readonly List<GameObject> _spawnedContent = new List<GameObject>(4);
+
     private void Start()
     {
-        groundSpawner = Object.FindFirstObjectByType<GroundSpawner>();
+        // groundSpawner is set via Init() before Start() fires.
+        // This fallback only triggers for tiles that somehow miss Init(). 
+        if (groundSpawner == null)
+            groundSpawner = Object.FindFirstObjectByType<GroundSpawner>();
+    }
+
+    /// <summary>Called by GroundSpawner when this tile is pulled from the pool.</summary>
+    public void Init(GroundSpawner spawner)
+    {
+        groundSpawner = spawner;
     }
 
     private void OnTriggerExit(Collider other)
     {
-        // Only spawn the next tile if the player is the one exiting the trigger
         if (other.CompareTag("Player"))
         {
             groundSpawner.spawnTile(true);
-            Destroy(gameObject, 2);
+            StartCoroutine(RecycleDeferred());
         }
+    }
+
+    /// <summary>
+    /// Waits the same 2 s as the old Destroy delay, then destroys each spawned
+    /// child on its own frame so GC pressure is spread rather than spiked.
+    /// Finally returns the tile itself to the pool (no Destroy — just SetActive(false)).
+    /// </summary>
+    private IEnumerator RecycleDeferred()
+    {
+        yield return new WaitForSeconds(2f);
+
+        for (int i = _spawnedContent.Count - 1; i >= 0; i--)
+        {
+            if (_spawnedContent[i] != null)
+                Destroy(_spawnedContent[i]);
+            yield return null; // one child destroyed per frame
+        }
+        _spawnedContent.Clear();
+
+        groundSpawner.ReturnToPool(this);
     }
 
     public void SpawnScenery()
     {
         int decorationIndex = Random.Range(0, sideDecorationPrefabs.Count);
 
-        // Prevent back-to-back identical scenery
         if (sideDecorationPrefabs.Count > 1 && decorationIndex == lastDecorationIndex)
-        {
             decorationIndex = (decorationIndex + 1) % sideDecorationPrefabs.Count;
-        }
 
         lastDecorationIndex = decorationIndex;
         GameObject prefabToSpawn = sideDecorationPrefabs[decorationIndex];
@@ -60,21 +92,16 @@ public class GroundTile : MonoBehaviour
 
     private void SpawnSingleScenery(Transform spawnPoint, GameObject prefabToSpawn, bool isLeft)
     {
-        GameObject spawnedScenery = Instantiate(prefabToSpawn, spawnPoint.position, Quaternion.identity, transform);
-
-        // Face scenery inwards depending on which side it spawns
+        GameObject spawned = Instantiate(prefabToSpawn, spawnPoint.position, Quaternion.identity, transform);
         if (isLeft)
-        {
-            spawnedScenery.transform.Rotate(0, 180, 0);
-        }
+            spawned.transform.Rotate(0, 180, 0);
+        _spawnedContent.Add(spawned);
     }
 
-    // OBSTACLE LOGIC
     public void spawnObstacle()
     {
         int laneIndex = Random.Range(0, 3);
 
-        // Prevent spawning in the exact same lane twice in a row
         if (laneIndex == lastSpawnIndex)
         {
             if (laneIndex == 0 || laneIndex == 2) laneIndex = 1;
@@ -86,24 +113,17 @@ public class GroundTile : MonoBehaviour
 
         int obstacleTypeIndex = Random.Range(0, currentPool.Count);
 
-        // Prevent back-to-back identical obstacles
         if (currentPool.Count > 1 && obstacleTypeIndex == lastObstacleTypeIndex)
-        {
             obstacleTypeIndex = (obstacleTypeIndex + 1) % currentPool.Count;
-        }
+
         lastObstacleTypeIndex = obstacleTypeIndex;
 
         GameObject prefabToSpawn = currentPool[obstacleTypeIndex];
-
-        // Explicit array lookup
         Transform spawnPoint = obstacleSpawnPoints[laneIndex];
 
         GameObject spawnedObstacle = Instantiate(prefabToSpawn, spawnPoint.position, Quaternion.identity, transform);
-
-        // Rotate obstacle if spawned on the left lane
         if (laneIndex == 0)
-        {
             spawnedObstacle.transform.Rotate(0, 180, 0);
-        }
+        _spawnedContent.Add(spawnedObstacle);
     }
 }

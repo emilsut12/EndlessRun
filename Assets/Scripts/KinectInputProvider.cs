@@ -38,6 +38,13 @@ public class KinectInputProvider : MotionInputProvider
 
     private void Start()
     {
+        // Skip all Kinect code when the build-options flag is set.
+        if (GameManager.Instance != null && GameManager.Instance.disableKinect)
+        {
+            enabled = false;
+            return;
+        }
+
         // Make sure the warning is hidden by default
         if (kinectWarningUI != null) kinectWarningUI.SetActive(false);
 

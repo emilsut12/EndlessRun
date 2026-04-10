@@ -120,6 +120,13 @@ public class KinectDirectRenderer : MonoBehaviour
 
     void Awake()
     {
+        // Disable this entire renderer when Kinect is turned off in GameManager.
+        if (GameManager.Instance != null && GameManager.Instance.disableKinect)
+        {
+            gameObject.SetActive(false);
+            return;
+        }
+
         // Activate the second physical display if one is connected
         if (Display.displays.Length > 1)
             Display.displays[1].Activate();

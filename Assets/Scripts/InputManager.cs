@@ -112,8 +112,9 @@ public class InputManager : MonoBehaviour
         if (motionInput != null && motionInput.IsProviderAvailable)
             return motionInput;
 
-        // 2. Kinect
-        if (kinectInput != null && kinectInput.IsProviderAvailable)
+        // 2. Kinect (skipped when disabled in GameManager build options)
+        if (kinectInput != null && kinectInput.IsProviderAvailable
+            && !(GameManager.Instance != null && GameManager.Instance.disableKinect))
             return kinectInput;
 
         // 3. ML Pose (webcam-based body tracking)

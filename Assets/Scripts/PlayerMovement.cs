@@ -39,6 +39,9 @@ public class PlayerMovement : MonoBehaviour
     private float jumpCooldown = 0.5f;
     private float lastJumpTime = 0f;
     private bool grounded;
+    private int  _playerLayer   = -1;
+    private int  _obstacleLayer = -1;
+    private bool _lastIgnoreCollision = false;
 
     [Header("Materials")]
     public Material opaqueMaterial;
@@ -63,6 +66,10 @@ public class PlayerMovement : MonoBehaviour
 
         // Grab all renderers attached to the player (in case the model has multiple parts)
         playerRenderers = GetComponentsInChildren<Renderer>();
+
+        // Cache physics layers so Update() doesn't call LayerMask.NameToLayer every frame
+        _playerLayer   = LayerMask.NameToLayer("Player");
+        _obstacleLayer = LayerMask.NameToLayer("Obstacle");
 
         // Store the default gravity from Unity's physics settings
         defaultGravity = Physics.gravity.y;
@@ -137,16 +144,14 @@ public class PlayerMovement : MonoBehaviour
             Jump();
         }
 
-        // Ghost & Invulnerability Mechanic
-        if (GameManager.Instance != null)
+        // Ghost & Invulnerability — only apply the physics layer change when the state changes.
+        if (GameManager.Instance != null && _playerLayer != -1 && _obstacleLayer != -1)
         {
-            int playerLayer = LayerMask.NameToLayer("Player");
-            int obstacleLayer = LayerMask.NameToLayer("Obstacle");
-
-            if (playerLayer != -1 && obstacleLayer != -1)
+            bool shouldIgnore = GameManager.Instance.isGhost || isInvulnerable;
+            if (shouldIgnore != _lastIgnoreCollision)
             {
-                // We now ignore collisions if the player is a Ghost OR currently Invulnerable
-                Physics.IgnoreLayerCollision(playerLayer, obstacleLayer, GameManager.Instance.isGhost || isInvulnerable);
+                Physics.IgnoreLayerCollision(_playerLayer, _obstacleLayer, shouldIgnore);
+                _lastIgnoreCollision = shouldIgnore;
             }
         }
 
